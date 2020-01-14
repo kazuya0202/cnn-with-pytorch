@@ -26,7 +26,7 @@ class Main():
         print()
 
         print(f'* image size:', len(self.files))
-
+        print('-------------------')
 
 if __name__ == '__main__':
     main = Main()
