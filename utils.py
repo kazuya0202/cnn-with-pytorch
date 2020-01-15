@@ -1,21 +1,20 @@
-def get_datasets(image_path, extensions=['jpg']):
-    from pathlib import Path
+from pathlib import Path
 
-    path = Path(image_path)
-    # not exist
-    if not path.exists():
-        print(f'The directory \'{image_path}\' does not exist.')
 
-    # directories in [image_path]
-    dirs = [d for d in path.glob('*') if d.is_dir()]
+class LogFile:
+    def __init__(self, path):
+        self.path = Path(path)
 
-    file_list = []  # file path list
+        # create output dir
+        self.path.parent.mkdir(parents=True, exist_ok=True)
 
-    # all extensions / all sub directories
-    for ext in extensions:
-        for _dir in dirs:
-            glob = _dir.glob(f'*.{ext}')
-            tmp = [f.as_posix() for f in glob if f.is_file()]
-            file_list.extend(tmp)
+        # create output file
+        self.path.touch()
 
-    return file_list, dirs
+    def write(self, line, debug_ok=True):
+        with self.path.open('a') as f:
+            ct = line + '\n'
+            f.write(ct)
+
+        if debug_ok:
+            print(line)
