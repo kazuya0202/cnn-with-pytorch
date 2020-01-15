@@ -12,7 +12,7 @@ class Main():
         self.gv = GlobalVariables()
 
         # datasets
-        self.ds = Datasets(*([None] * 5))
+        # self.ds = Datasets(*([None] * 5))
 
     def execute(self):
         # path = self.gv.image_path
@@ -21,28 +21,40 @@ class Main():
         # train_size = self.gv.train_size
         # test_size = self.gv.test_size
 
-        # not exist
+        # if not exist, exit script
         if not Path(self.gv.image_path).exists():
             print(f'The directory \'{self.gv.image_path}\' does not exist.')
+            exit()
 
-        # arguments of Datasets
+        # arguments of class(Datasets)
         params = [
             self.gv.image_path,  # path
             self.gv.extensions,  # extensions
             self.gv.image_size,  # all_size
-            self.gv.train_size,  # train_size
             self.gv.test_size,  # test_size
-            True    # is_print_cfg
+            self.gv.minibatch_size,  # minibatch_size
+            True    # is_print_cfg | for debug
+            # False    # is_print_cfg
         ]
+        ds = Datasets(*params)
 
-        # self.ds = Datasets(path, exts, all_size, train_size, test_size, True)
-        self.ds = Datasets(*params)
+        # get file name
+        dt_now = str(datetime.datetime.now().strftime(
+            "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
+        print(dt_now)
 
-        for d in self.ds.train_list:
-            print(d.configs())
+        xs = ds.get_next_train_datas()
+        for x in xs:
+            print(x.path)
 
-        # datetime
-        # print(datetime.datetime.now())
+        # usage: configs
+        # for d in ds.train_list:
+        #     print(d.configs())
+
+        # usage: list_each_class
+        # for c in ds.classes:
+        #     for k, v in ds.list_each_class[c].items():
+        #         print(k, v)
 
 
 if __name__ == '__main__':
