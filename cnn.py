@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-if __name__ != '__main__':
+if __name__ !=  '__main__':
     exit()
 
 

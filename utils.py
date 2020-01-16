@@ -1,6 +1,21 @@
 from pathlib import Path
 
 
+class TorchModel:
+    import torch
+    # def __init__(self):
+    #     pass
+
+    def save(self, path, model):
+        # save info
+        # => epoch ...
+        pass
+
+    def load(self, path):
+        # self.epoch = None
+        pass
+
+
 class LogFile:
     def __init__(self, path):
         self.path = Path(path)

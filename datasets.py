@@ -7,6 +7,7 @@ import random
 class Data:
     def __init__(self, path=None, label=0, name='None'):
         if path is None:
+            self.path = None
             return
 
         self.path = path
@@ -42,13 +43,15 @@ class Datasets:
         self.extensions = extensions
 
         # images
-        self.all_list = []
         self.train_list = [Data()]
         self.test_list = [Data()]
 
+        self.each_cls_list = {}  # all images
+        self.classes = []  # classes of datasets
+
         # remove first element / for using auto completion
-        self.train_list.remove(self.train_list[0])
-        self.test_list.remove(self.test_list[0])
+        self.remove_first_element(self.train_list)
+        self.remove_first_element(self.test_list)
 
         # size of images
         self.all_size = all_size
@@ -56,114 +59,98 @@ class Datasets:
         self.test_size = test_size
 
         self.minibatch_size = minibatch_size
-
-        # classes of datasets
-        self.classes = []
-
-        self.each_cls_list = {}
         self.now_train_size = 0
-        # self.list_each_class = {}
 
         # ----------
 
-        # all_list / train_list / test_list
+        # train_list / test_list
         self.get_all_datas()
-        self.classify_datas()
-        # self.re_shuffle(is_all=True)
+
+        # shuffle data
+        # self.shuffle_data(target='train')
 
         if is_print_cfg:
             self.print_parameter_config()
 
-    # def get_all_datas(self):
-    #     """ Get All Datasets from each directory.
-    #     """
-    #     path = Path(self.path)
-
-    #     # directories in [image_path]
-    #     dirs = [d for d in path.glob('*') if d.is_dir()]
-
-    #     files = [[Data()]]  # file path list
-    #     files.remove(files[0])  # for using auto completion
-
-    #     # all extensions / all sub directories
-    #     for idx, _dir in enumerate(dirs):
-    #         xs = []
-    #         for ext in self.extensions:
-    #             target = _dir.glob(f'*.{ext}')
-    #             tmp = [Data(x.as_posix(), idx, _dir.name)
-    #                    for x in target if x.is_file()]
-    #             # files.extend(tmp)
-    #             xs.extend(tmp)
-    #         files.append(xs)
-
     def get_all_datas(self):
-        """ Get All Datasets from each directory.
-        """
+        """ Get All Datasets from each directory. """
         path = Path(self.path)
 
         # directories in [image_path]
         dirs = [d for d in path.glob('*') if d.is_dir()]
 
-        files = [[Data()]]  # file path list
-        files.remove(files[0])  # for using auto completion
+        # classes
+        self.classes = [str(d.name) for d in dirs]
 
         # all extensions / all sub directories
-
         threshold = self.test_size
 
         for idx, _dir in enumerate(dirs):
             xs = []
             for ext in self.extensions:
-                target = _dir.glob(f'*.{ext}')
                 tmp = [Data(x.as_posix(), idx, _dir.name)
-                       for x in target if x.is_file()]
+                       for x in _dir.glob(f'*.{ext}') if x.is_file()]
                 xs.extend(tmp)
 
-            _train = xs[threshold:]
-            _test = xs[:threshold]
+            train = xs[threshold:]
+            test = xs[:threshold]
             self.each_cls_list[_dir.name] = {
-                'train': _train,
-                'test': _test
+                'train': train,
+                'test': test
             }
-        self.all_list = files
-        self.classes = [str(d.name) for d in dirs]
 
-    def classify_datas(self):
-        # def extend_train_test_datas(self):
+            random.shuffle(train)
+            self.train_list.extend(train)
+            self.test_list.extend(test)
+
+    def shuffle_data(self, target='train'):
+        new_list = [Data(None)]
+        self.remove_first_element(new_list)
+
         for _cls in self.classes:
-            xs = self.each_cls_list[_cls]
-            random.shuffle(xs['train'])
+            xs = self.each_cls_list[_cls][target]
+            random.shuffle(xs)
+            new_list.extend(xs)
 
-            self.train_list.extend(xs['train'])
-            self.test_list.extend(xs['test'])
+        # shuffle new_list of all
+        # random.shuffle(new_list)
 
-        # shuffle in train(or test) list of all
-        # random.shuffle(self.train_list)
-        # random.shuffle(self.test_list)
+        if target == 'train':
+            self.train_list = new_list
+        elif target == 'test':
+            self.test_list = new_list
 
-    # def classify_datas(self):
-    #     threshold = self.test_size
+    def get_next_train_datas(self):
+        plus = min(self.minibatch_size, self.train_size - self.now_train_size)
 
-    #     for _cls, x in zip(self.classes, self.all_list):
-    #         # shuffle in each class
-    #         random.shuffle(x)
+        # if train data is empty, return None
+        #  => end of this epoch
+        if plus <= 0:
+            return [Data(None)]
+            # yield [Data(None)]
 
-    #         # classify
-    #         _train = x[threshold:]
-    #         _test = x[:threshold]
+        bgn = self.now_train_size
+        end = bgn + plus
 
-    #         # save data per each class
-    #         self.list_each_class[_cls] = {
-    #             'train': _train,
-    #             'test': _test
-    #         }
+        self.now_train_size += plus
+        return self.train_list[bgn:end]
+        # yield self.train_list[bgn:end]
 
-    #         self.train_list.extend(_train)
-    #         self.test_list.extend(_test)
+    def remove_first_element(self, _list):
+        _list.remove(_list[0])
 
-    #     # shuffle in train(or test) list of all
-    #     # random.shuffle(self.train_list)
-    #     # random.shuffle(self.test_list)
+    def print_parameter_config(self):
+        print('----- Parameters / Configs -----')
+        print(f'* image path:', self.path)
+        print(f'* extension:', self.extensions)
+        print(f'* image size:', self.all_size)
+        print(f'* train size:', self.train_size)
+        print(f'* test size:', self.test_size)
+
+        print(f'\n{self.path}')
+        for i, x in enumerate(self.classes):
+            print(f'    |- {x} : label [{i}]')
+        print('--------------------------------\n')
 
     # for [all_list] use as one dimension
     # def get_each_test_datas(self):
@@ -178,42 +165,3 @@ class Datasets:
     #         sample = random.sample(_filter, self.test_size)
     #         tmp.extend(sample)
     #     self.test_list = tmp
-
-    def get_next_train_datas(self):
-        plus = min(self.minibatch_size, self.train_size - self.now_train_size)
-        bgn = self.now_train_size
-        end = bgn + plus
-
-        self.now_train_size += plus
-        return self.train_list[bgn:end]
-
-    def re_shuffle(self, is_all=False):
-        """ shuffle list
-
-        Args:
-            is_all (bool, optional): target of shuffle. Defaults to False.
-        """
-
-        threshold = self.test_size
-
-        if is_all:
-            # all shuffle
-            sample = random.sample(self.all_list, len(self.all_list))
-            self.train_list = sample[threshold:]
-            self.test_list = sample[:threshold]
-        else:
-            # train shuffle
-            random.shuffle(self.train_list)
-
-    def print_parameter_config(self):
-        print('----- Parameters / Configs -----')
-        print(f'* image path:', self.path)
-        print(f'* extension:', self.extensions)
-        print(f'* image size:', self.all_size)
-        print(f'* train size:', self.train_size)
-        print(f'* test size:', self.test_size)
-
-        print(f'\n{self.path}')
-        for i, x in enumerate(self.classes):
-            print(f'    |- {x} : label [{i}]')
-        print('--------------------------------\n')
