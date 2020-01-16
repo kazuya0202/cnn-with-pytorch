@@ -43,18 +43,33 @@ class Main():
             "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
         print(dt_now)
 
+        params = [self.gv.log_path, dt_now]
+        t = ul.create_file_path(*params)
+        s1 = ul.LogFile(t)
+        t = ul.create_file_path(*params, 'csv')
+        s2 = ul.LogFile(t)
+
+        print(t)
+        # self.usage_test(ds)
+
+    def usage_test(self, ds):
         xs = ds.get_next_train_datas()
         for x in xs:
             print(x.path)
 
         # usage: configs
-        # for d in ds.train_list:
-        #     print(d.configs())
+        for d in ds.train_list:
+            print(d.configs())
+
+        for d in ds.test_list:
+            print(d.configs())
 
         # usage: list_each_class
         # for c in ds.classes:
-        #     for k, v in ds.list_each_class[c].items():
-        #         print(k, v)
+        #     for k, v in ds.each_cls_list[c].items():
+        #         print(f'key: {k}')
+        #         for x in v:
+        #             print(x.path)
 
 
 if __name__ == '__main__':
