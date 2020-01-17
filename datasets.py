@@ -15,10 +15,10 @@ class Data:
         self.name = name
         self.img_data = np.array(0)
 
-    def open_image(self):
+    def load_image(self, loader, device):
         img = Image.open(self.path)
-        # ...
-        self.img_data = img
+        img = loader(img).unsqueeze(0)
+        return img.to(device)
 
     def configs(self):
         return self.name, self.label, self.path
@@ -31,8 +31,7 @@ class Datasets:
             extensions,
             all_size,
             test_size,
-            minibatch_size,
-            is_print_cfg=False):
+            minibatch_size):
 
         # for instance temporary in Main class
         xx = [path, extensions, all_size, test_size]
@@ -68,9 +67,6 @@ class Datasets:
 
         # shuffle data
         # self.shuffle_data(target='train')
-
-        if is_print_cfg:
-            self.print_parameter_config()
 
     def get_all_datas(self):
         """ Get All Datasets from each directory. """

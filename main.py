@@ -2,10 +2,18 @@ from pathlib import Path
 import datetime
 import numpy as np
 
+# torch
+import torch
+# import torch.nn as nn
+# import torch.nn.functional as F
+# import torch.optim as optim
+import torchvision.transforms as transforms
+
 # my packages
 import utils as ul
 from global_variables import GlobalVariables
 from datasets import Datasets
+import cnn
 
 
 class Main():
@@ -13,19 +21,58 @@ class Main():
         self.gv = GlobalVariables()
 
         # datasets
-        self.ds = Datasets(*([None] * 6))
+        self.ds = Datasets(*([None] * 5))
 
     def execute(self):
-        # path = self.gv.image_path
-        # exts = self.gv.extensions
-        # all_size = self.gv.image_size
-        # train_size = self.gv.train_size
-        # test_size = self.gv.test_size
+        net = cnn.Net()
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # use_cudnn = torch.backends.cudnn.version()
+
+        # print(device)
+        # print(use_cudnn)
+
+        net.to(device)
+        print(net)
+
+        # _input = torch.randn(1, 1, 32, 32).to(device)
+        # out = net(_input)
+        # print(out)
+
+        net.zero_grad()
+        # out.backward(torch.randn(1, 10).to(device))
+
+        image_size = 80
+        loader = transforms.Compose([
+            # transforms.Resize(32),
+            transforms.ToTensor()])
+
+        def load_image(path, loader, device):
+            from PIL import Image
+            img = Image.open(path)
+            img = img.convert('RGB')
+            img = img.resize((32, 32))
+
+            # img = loader(img).unsqueeze(0)
+            img = loader(img)
+            return img.to(device)
+
+        p = r'C:\ichiya\repos\github.com\kazuya0202\cnn-with-pytorch\recognition_datasets\Images\crossing\crossing-samp1_10_1.jpg'
+        s = load_image(p, loader, device)
+        print(s.size())
+        # exit()
+        t = torch.FloatTensor([s])
+        print(t)
+        # out = net()
+        # print(out)
+        exit()
 
         # if not exist, exit script
         if not Path(self.gv.image_path).exists():
             print(f'The directory \'{self.gv.image_path}\' does not exist.')
             exit()
+
+        # ===== create datasets =====
+        log = ul.DebugLog('Getting datasets')
 
         # arguments of class(Datasets)
         params = [
@@ -34,10 +81,24 @@ class Main():
             self.gv.image_size,  # all_size
             self.gv.test_size,  # test_size
             self.gv.minibatch_size,  # minibatch_size
-            True    # is_print_cfg | for debug
-            # False    # is_print_cfg
         ]
+
         self.ds = Datasets(*params)
+        log.complete()
+
+        # ===== create make required direcotry =====
+        log = ul.DebugLog('Making required directory')
+
+        # argments
+        params = [
+            self.gv.log_path,
+        ]
+
+        ul.make_directories(*params)
+        log.complete()
+
+        print()
+        self.ds.print_parameter_config()
 
         # get file name
         self.dt_now = str(datetime.datetime.now().strftime(
@@ -51,7 +112,7 @@ class Main():
         # t = ul.create_file_path(*params, 'csv')
         # s2 = ul.LogFile(t)
 
-        self.usage_test()
+        # self.usage_test()
 
     def usage_test(self):
         # --- TRAIN ---
@@ -96,6 +157,23 @@ class Main():
         # -----
 
 
+# def deco(func):
+#     def wrapper(*args, **kwargs):
+#         print(*args)
+#         print('a')
+#         func(*args, **kwargs)
+#         print('c')
+#     return wrapper
+
+
+# @deco
+# def testa(a):
+#     print('b')
+
+
 if __name__ == '__main__':
+    # testa('b')
+    # exit()
+
     main = Main()
     main.execute()

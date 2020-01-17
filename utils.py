@@ -48,3 +48,22 @@ def create_file_path(dir_path, name, ext='txt'):
 
     path = parent.joinpath(f'{num}_{name}.{ext}')
     return path
+
+
+class DebugLog:
+    def __init__(self, line):
+        self.line = line
+        self.progress()
+
+    def progress(self):
+        print(f'[now] {self.line} ...', end='', flush=True)
+
+    def complete(self):
+        print(f'\r[completed] {self.line}.\n')
+
+
+def make_directories(*args):
+    for p in args:
+        p = Path(p)
+        if not p.exists():
+            p.mkdir(parents=True)
