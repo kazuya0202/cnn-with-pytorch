@@ -1,179 +1,200 @@
-from pathlib import Path
 import datetime
-import numpy as np
+from pathlib import Path
 
-# torch
+import numpy as np
 import torch
-# import torch.nn as nn
-# import torch.nn.functional as F
-# import torch.optim as optim
 import torchvision.transforms as transforms
+from torch.utils.data import DataLoader
+
 
 # my packages
+import torch_utils as tu
 import utils as ul
 from global_variables import GlobalVariables
-from datasets import Datasets
-import cnn
 
 
-class Main():
+class Main:
     def __init__(self):
-        self.gv = GlobalVariables()
+        # GPU / CPU
+        self.device = torch.device(
+            'cuda' if torch.cuda.is_available() else 'cpu')
 
-        # datasets
-        self.ds = Datasets(*([None] * 5))
+        # get file name
+        self.filename_base = str(datetime.datetime.now().strftime(
+            "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
 
     def execute(self):
-        net = cnn.Net()
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # use_cudnn = torch.backends.cudnn.version()
+        # import cupy as cp
+        # pool = cp.cuda.MemoryPool(cp.cuda.malloc_managed)
+        # cp.cuda.set_allocator(pool.malloc)
 
-        # print(device)
-        # print(use_cudnn)
-
-        net.to(device)
-        print(net)
-
-        # _input = torch.randn(1, 1, 32, 32).to(device)
-        # out = net(_input)
-        # print(out)
-
-        net.zero_grad()
-        # out.backward(torch.randn(1, 10).to(device))
-
-        image_size = 80
-        loader = transforms.Compose([
-            # transforms.Resize(32),
-            transforms.ToTensor()])
-
-        def load_image(path, loader, device):
-            from PIL import Image
-            img = Image.open(path)
-            img = img.convert('RGB')
-            img = img.resize((32, 32))
-
-            # img = loader(img).unsqueeze(0)
-            img = loader(img)
-            return img.to(device)
-
-        p = r'C:\ichiya\repos\github.com\kazuya0202\cnn-with-pytorch\recognition_datasets\Images\crossing\crossing-samp1_10_1.jpg'
-        s = load_image(p, loader, device)
-        print(s.size())
-        # exit()
-        t = torch.FloatTensor([s])
-        print(t)
-        # out = net()
-        # print(out)
-        exit()
+        gv = GlobalVariables()
 
         # if not exist, exit script
-        if not Path(self.gv.image_path).exists():
-            print(f'The directory \'{self.gv.image_path}\' does not exist.')
-            exit()
+        if not Path(gv.image_path).exists():
+            print(f'The directory \'{gv.image_path}\' does not exist.')
+            exit(-1)
+
+        # ===== log file =====
+        # parameters for LogFile
+        log_params = [gv.log_path, self.filename_base]
+
+        # log file
+        p = None if not gv.is_save_debug_log \
+            else ul.create_file_path(*log_params)
+        log_file = ul.LogFile(p, default_debug_ok=True)
+
+        # rate file
+        p = None if not gv.is_save_rate_log \
+            else ul.create_file_path(*log_params, ext='csv')
+        rate_file = ul.LogFile(p, default_debug_ok=True)
 
         # ===== create datasets =====
-        log = ul.DebugLog('Getting datasets')
+        log = ul.DebugLog(f'Create dataset from \'{gv.image_path}\'')
 
-        # arguments of class(Datasets)
-        params = [
-            self.gv.image_path,  # path
-            self.gv.extensions,  # extensions
-            self.gv.image_size,  # all_size
-            self.gv.test_size,  # test_size
-            self.gv.minibatch_size,  # minibatch_size
-        ]
+        # get input image size as tuple
+        image_size = gv.image_size
+        if not isinstance(image_size, tuple):
+            image_size = (image_size, image_size)
 
-        self.ds = Datasets(*params)
+        # transform
+        transform = transforms.Compose([
+            transforms.Resize(image_size),
+            transforms.ToTensor()])
+
+        dataset = tu.CreateDataset(
+            path=gv.image_path,
+            extensions=gv.extensions,
+            test_size=gv.test_size)
+
+        train_data, test_data = self.__create_custom_dataset(
+            dataset=dataset,
+            batch_size=gv.batch_size,
+            transform=transform)
+
         log.complete()
+
+        # classes
+        for k, _cls in dataset.classes.items():
+            log_file.writeline(f'{k}: {_cls}')
+        log_file.writeline()
 
         # ===== create make required direcotry =====
         log = ul.DebugLog('Making required directory')
 
-        # argments
+        pth_epoch_path = None if gv.pth_save_cycle == 0 \
+            else f'{gv.pth_path}/epoch_pth'
+
+        # arguments of required path
         params = [
-            self.gv.log_path,
-        ]
+            gv.false_path,
+            gv.log_path,
+            gv.pth_path,
+            pth_epoch_path]
 
         ul.make_directories(*params)
         log.complete()
 
-        print()
-        self.ds.print_parameter_config()
+        # ===== network =====
+        log = ul.DebugLog('Create CNN network')  # debug log
 
-        # get file name
-        self.dt_now = str(datetime.datetime.now().strftime(
-            "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
-        print(self.dt_now)
+        model = tu.Model(self.device, image_size)
 
-        # usage: log file
-        # params = [self.gv.log_path, dt_now]
-        # t = ul.create_file_path(*params)
-        # s1 = ul.LogFile(t)
-        # t = ul.create_file_path(*params, 'csv')
-        # s2 = ul.LogFile(t)
+        log.complete()
 
-        # self.usage_test()
+        # ===== train =====
+        train_model = tu.TrainModel(
+            model=model,
+            epoch=gv.epoch,
+            train_data=train_data,
+            test_data=test_data,
+            classes=dataset.classes,
+            log_file=log_file,
+            rate_file=rate_file,
+            is_test_per_epoch=gv.is_test_per_epoch,
+            pth_save_cycle=gv.pth_save_cycle,
+            pth_epoch_path=pth_epoch_path)
 
-    def usage_test(self):
-        # --- TRAIN ---
-        train_size = self.gv.image_size - self.gv.test_size
-        # while True:
-        _ceil = int(np.ceil(train_size / self.gv.minibatch_size))
-        for i in range(_ceil):
-            print(f'\nloop times:', i + 1)
+        train_model.train()
 
-            for x in self.ds.get_next_train_datas():
-                # end of this epoch
-                if x.path is None:
-                    return
-                print(x.path)
-        print('\nend this epoch.')
+        # ===== final test =====
+        test_model = tu.TestModel(
+            model=model,
+            test_data=test_data,
+            classes=dataset.classes,
+            log_file=log_file)
 
-        # xs = self.ds.get_next_train_datas()
-        # for x in xs:
-        #     print(x.path)
+        test_model.test()
 
-        # params = [self.gv.log_path, self.dt_now]
-        # t = ul.create_file_path(*params)
-        # s1 = ul.LogFile(t)
+        # ===== save model =====
+        pt_params = [gv.pth_path, self.filename_base]
+        p = ul.create_file_path(*pt_params, ext='pth')
 
-        # usage: configs
-        # print('train list:')
-        # for d in self.ds.train_list:
-        #     # s1.writeline(d.configs())
-        #     print(d.configs())
+        log = ul.DebugLog(f'Saving model {p}')
 
-        # print('test list:')
-        # for d in ds.test_list:
-        #     print(d.configs())
-        # -----
+        train_model.model.save_model(p)
 
-        # usage: list_each_class
-        # for c in ds.classes:
-        #     for k, v in ds.each_cls_list[c].items():
-        #         print(f'key: {k}')
-        #         for x in v:
-        #             print(x.path)
-        # -----
+        log.complete()
+
+    def __create_custom_dataset(
+            self,
+            dataset: tu.CreateDataset,
+            batch_size: int,
+            transform: transforms):
+
+        # train dataset, shuffle
+        train_dataset = tu.CustomDataset(
+            dataset=dataset,
+            target='train',
+            transform=transform)
+
+        train_data = DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            shuffle=True)
+
+        # test dataset, shuffle
+        test_dataset = tu.CustomDataset(
+            dataset=dataset,
+            target='test',
+            transform=transform)
+
+        batch = int(np.ceil(batch_size / 10.0))
+
+        test_data = DataLoader(
+            test_dataset,
+            batch_size=batch,
+            shuffle=True)
+
+        return train_data, test_data
+
+    def print_parameter_config(self):
+        return
+        # cls_num = len(self.classes)
+
+        # _cls = list(self.classes.keys())[0]
+        # each_cls_size = self.each_cls_list[_cls]['train']
+        # each_cls_size += self.each_cls_list[_cls]['test']
+
+        print('----- Configs -----')
+        print(f'* image path: {self.path}')
+        print(f'* extensions: {self.extensions}')
+        # print(f'* dataset size: {self.all_size} ({each_cls_size} * {cls_num} = {self.all_size})')
+        print(f'* ')
+        print(f'* ')
+
+        # print(f'* image path:', self.path)
+        # print(f'* extension:', self.extensions)
+        # print(f'* image size:', self.all_size)
+        # print(f'* train size:', self.train_size)
+        # print(f'* test size:', self.test_size)
+
+        print(f'\n{self.path}')
+        for i, x in enumerate(self.classes):
+            print(f'    |- {x} : label [{i}]')
+        print('--------------------------------\n')
 
 
-# def deco(func):
-#     def wrapper(*args, **kwargs):
-#         print(*args)
-#         print('a')
-#         func(*args, **kwargs)
-#         print('c')
-#     return wrapper
-
-
-# @deco
-# def testa(a):
-#     print('b')
-
-
-if __name__ == '__main__':
-    # testa('b')
-    # exit()
-
+if __name__ == "__main__":
     main = Main()
     main.execute()

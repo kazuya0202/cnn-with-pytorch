@@ -42,20 +42,23 @@ class Datasets:
         self.extensions = extensions
 
         # images
-        self.train_list = [Data()]
-        self.test_list = [Data()]
+        self.train_list = []
+        self.test_list = []
 
         self.each_cls_list = {}  # all images
         self.classes = []  # classes of datasets
 
         # remove first element / for using auto completion
-        self.remove_first_element(self.train_list)
-        self.remove_first_element(self.test_list)
+        # self.remove_first_element(self.train_list)
+        # self.remove_first_element(self.test_list)
 
         # size of images
         self.all_size = all_size
-        self.train_size = all_size - test_size
-        self.test_size = test_size
+        self.each_train_size = all_size - test_size
+        self.each_test_size = test_size
+
+        self.train_size = 0
+        self.test_size = 0
 
         self.minibatch_size = minibatch_size
         self.now_train_size = 0
@@ -70,6 +73,10 @@ class Datasets:
 
     def get_all_datas(self):
         """ Get All Datasets from each directory. """
+        # init
+        self.train_list = []
+        self.test_list = []
+
         path = Path(self.path)
 
         # directories in [image_path]
@@ -79,7 +86,7 @@ class Datasets:
         self.classes = [str(d.name) for d in dirs]
 
         # all extensions / all sub directories
-        threshold = self.test_size
+        threshold = self.each_test_size
 
         for idx, _dir in enumerate(dirs):
             xs = []
@@ -88,6 +95,7 @@ class Datasets:
                        for x in _dir.glob(f'*.{ext}') if x.is_file()]
                 xs.extend(tmp)
 
+            random.shuffle(xs)
             train = xs[threshold:]
             test = xs[:threshold]
             self.each_cls_list[_dir.name] = {
@@ -98,6 +106,9 @@ class Datasets:
             random.shuffle(train)
             self.train_list.extend(train)
             self.test_list.extend(test)
+
+        self.train_size = len(self.train_list)
+        self.test_size = len(self.test_list)
 
     def shuffle_data(self, target='train'):
         new_list = [Data(None)]
@@ -141,7 +152,7 @@ class Datasets:
         print(f'* extension:', self.extensions)
         print(f'* image size:', self.all_size)
         print(f'* train size:', self.train_size)
-        print(f'* test size:', self.test_size)
+        print(f'* test size:', self.each_test_size)
 
         print(f'\n{self.path}')
         for i, x in enumerate(self.classes):

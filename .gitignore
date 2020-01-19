@@ -1,4 +1,5 @@
 recognition_datasets/**/*
+./classes.txt
 
 ### Python
 
