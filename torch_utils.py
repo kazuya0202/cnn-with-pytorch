@@ -126,7 +126,7 @@ class CustomDataset(Dataset):
 class Model:
     def __init__(
             self,
-            device,
+            device: torch.device,
             image_size: tuple = (60, 60),
             load_pth_path: Optional[str] = None):
 
@@ -171,7 +171,7 @@ class Model:
 
         # epoch = checkpoint['epoch']
         net.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         criterion = nn.CrossEntropyLoss()
 
         net.to(self.device)
@@ -182,8 +182,9 @@ class Model:
     def save_model(self, path: str, epoch: Optional[int] = None):
         torch.save({
             # 'epoch': epoch,
+            # 'classes': classes,
             'model_state_dict': self.net.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
+            # 'optimizer_state_dict': self.optimizer.state_dict(),
             # 'criterion': type(self.criterion).__name__
         }, path)
 
@@ -247,7 +248,7 @@ class TestModel:
                 all_size[k] += x.tolist().count(1)  # all size of each class
         print()
 
-        # calc each accuracy
+        # calc each accuracya0
         for k, _cls in self.classes.items():
             acc = round(acc_list[k] / all_size[k], 4)
             total_acc += acc
