@@ -1,9 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-# my packages
-# import torch_utils as tu
-
 
 class Net(nn.Module):
     def __init__(self, input_size):
@@ -52,6 +49,7 @@ class Net(nn.Module):
         self.fc6 = nn.Linear(256 * in_height * in_width, 2048)
         self.fc7 = nn.Linear(2048, 512)
         self.fc8 = nn.Linear(512, 3)
+    # end of [function] __init__
 
     # from pytorch_memlab import profile
     # @profile
@@ -75,6 +73,7 @@ class Net(nn.Module):
         x = self.fc8(x)
 
         return x
+    # end of [function] forward
 
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension
@@ -82,3 +81,5 @@ class Net(nn.Module):
         for s in size:
             num_features *= s
         return num_features
+    # end of [function] num_flat_features
+# end of [class] Net

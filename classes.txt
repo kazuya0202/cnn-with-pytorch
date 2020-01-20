@@ -1,3 +1,0 @@
-0:crossing
-1:klaxon
-2:noise

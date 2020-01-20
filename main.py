@@ -1,4 +1,3 @@
-import datetime
 from pathlib import Path
 
 import numpy as np
@@ -6,11 +5,10 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
-
 # my packages
 import torch_utils as tu
 import utils as ul
-from global_variables import GlobalVariables
+import global_variables as _gv
 
 
 class Main:
@@ -18,39 +16,31 @@ class Main:
         # GPU / CPU
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() else 'cpu')
-
-        # get file name
-        self.filename_base = str(datetime.datetime.now().strftime(
-            "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
+    # end of [function] __init__
 
     def execute(self):
-        # import cupy as cp
-        # pool = cp.cuda.MemoryPool(cp.cuda.malloc_managed)
-        # cp.cuda.set_allocator(pool.malloc)
-
-        gv = GlobalVariables()
+        gv = _gv.GlobalVariables()
 
         # if not exist, exit script
         if not Path(gv.image_path).exists():
             print(f'The directory \'{gv.image_path}\' does not exist.')
             exit(-1)
 
-        # ===== log file =====
-        # parameters for LogFile
-        log_params = [gv.log_path, self.filename_base]
+        # ===== log / rate file =====
+        logs = ul.DebugRateLogs()  # init as None
 
-        # log file
-        p = None if not gv.is_save_debug_log \
-            else ul.create_file_path(*log_params)
-        log_file = ul.LogFile(p, default_debug_ok=True)
+        # update debug log
+        if gv.is_save_debug_log:
+            p = ul.create_file_path(gv.log_path, gv.filename_base)
+            logs.set_log(ul.LogFile(p, default_debug_ok=True))
 
-        # rate file
-        p = None if not gv.is_save_rate_log \
-            else ul.create_file_path(*log_params, ext='csv')
-        rate_file = ul.LogFile(p, default_debug_ok=True)
+        # update rate log
+        if gv.is_save_rate_log:
+            p = ul.create_file_path(gv.log_path, gv.filename_base)
+            logs.set_rate(ul.LogFile(p, default_debug_ok=True))
 
         # ===== create datasets =====
-        log = ul.DebugLog(f'Create dataset from \'{gv.image_path}\'')
+        debug_log = ul.DebugLog(f'Create dataset from \'{gv.image_path}\'')
 
         # get input image size as tuple
         image_size = gv.image_size
@@ -70,77 +60,73 @@ class Main:
         train_data, test_data = self.__create_custom_dataset(
             dataset=dataset,
             batch_size=gv.batch_size,
-            transform=transform)
+            transform=transform,
+            is_shuffle=gv.is_shuffle_per_epoch)
 
-        log.complete()
+        debug_log.complete()
 
         # classes
         for k, _cls in dataset.classes.items():
-            log_file.writeline(f'{k}: {_cls}')
-        log_file.writeline()
+            logs.log.writeline(f'{k}: {_cls}')
+        logs.log.writeline()
 
         # ===== create make required direcotry =====
-        log = ul.DebugLog('Making required directory')
-
-        pth_epoch_path = None if gv.pth_save_cycle == 0 \
-            else f'{gv.pth_path}/epoch_pth'
+        debug_log = ul.DebugLog('Making required directory')
 
         # arguments of required path
         params = [
             gv.false_path,
             gv.log_path,
-            gv.pth_path,
-            pth_epoch_path]
+            gv.pth_path]
 
         ul.make_directories(*params)
-        log.complete()
+        debug_log.complete()
 
         # ===== network =====
-        log = ul.DebugLog('Create CNN network')  # debug log
+        debug_log = ul.DebugLog('Building CNN network')  # debug log
 
-        model = tu.Model(self.device, image_size)
+        model = tu.Model(self.device, dataset.classes, image_size)
 
-        log.complete()
+        debug_log.complete()
 
-        # ===== train =====
+        # ===== dataset model =====
+        test_model = tu.TestModel(
+            model=model,
+            test_data=test_data,
+            logs=logs)
+
         train_model = tu.TrainModel(
             model=model,
             epoch=gv.epoch,
             train_data=train_data,
-            test_data=test_data,
-            classes=dataset.classes,
-            log_file=log_file,
-            rate_file=rate_file,
-            is_test_per_epoch=gv.is_test_per_epoch,
-            pth_save_cycle=gv.pth_save_cycle,
-            pth_epoch_path=pth_epoch_path)
+            test_model=test_model,
+            gv=gv,
+            # test_cycle=gv.test_cycle,
+            # pth_save_cycle=gv.pth_save_cycle,
+            # pth_epoch_path=pth_epoch_path,
+            logs=logs)
 
-        train_model.train()
-
-        # ===== final test =====
-        test_model = tu.TestModel(
-            model=model,
-            test_data=test_data,
-            classes=dataset.classes,
-            log_file=log_file)
-
-        test_model.test()
+        # exec
+        train_model.train()  # train
+        test_model.test()  # final test
 
         # ===== save model =====
-        pt_params = [gv.pth_path, self.filename_base]
+        # pth path
+        pt_params = [gv.pth_path, gv.filename_base]
         p = ul.create_file_path(*pt_params, ext='pth')
 
-        log = ul.DebugLog(f'Saving model {p}')
-
-        train_model.model.save_model(p)
-
-        log.complete()
+        debug_log = ul.DebugLog(f'Saving model to \'{p}\'')
+        # train_model.model.save_model(p)  # save
+        logs.log.writeline(f'Saved model to \'{p}\'')
+        debug_log.complete()
+    # end of [function] execute
 
     def __create_custom_dataset(
             self,
             dataset: tu.CreateDataset,
             batch_size: int,
-            transform: transforms):
+            transform: transforms,
+            is_shuffle: bool):
 
         # train dataset, shuffle
         train_dataset = tu.CustomDataset(
@@ -167,6 +153,7 @@ class Main:
             shuffle=True)
 
         return train_data, test_data
+    # end of [function] __create_custom_dataset
 
     def print_parameter_config(self):
         return
@@ -193,6 +180,8 @@ class Main:
         for i, x in enumerate(self.classes):
             print(f'    |- {x} : label [{i}]')
         print('--------------------------------\n')
+    # end of [function] print_parameter_config
+# end of [class] Main
 
 
 if __name__ == "__main__":

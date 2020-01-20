@@ -44,7 +44,7 @@ class Test:
         test_log_file = ul.LogFile(p)
 
         model = tu.Model(device, image_size, load_path=self.pt_path)
-        test_model = tu.TestModel(model, test_data, log_file=test_log_file)
+        test_model = tu.TestModel(model, test_data, logs=test_log_file)
 
 
 if __name__ == "__main__":
