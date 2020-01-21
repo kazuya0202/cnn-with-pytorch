@@ -101,9 +101,6 @@ class Main:
             train_data=train_data,
             test_model=test_model,
             gv=gv,
-            # test_cycle=gv.test_cycle,
-            # pth_save_cycle=gv.pth_save_cycle,
-            # pth_epoch_path=pth_epoch_path,
             logs=logs)
 
         # exec
