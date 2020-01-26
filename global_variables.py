@@ -21,13 +21,13 @@ class GlobalVariables:
         self.is_shuffle_per_epoch = True  # エポック毎にデータセットをシャッフルするかどうか
 
         # [cycle]: 0 -> 何もしない / 10 -> 10 epoch / N -> N epoch ...
-        self.pth_save_cycle = 2  # 学習モデル(pth) の保存サイクル('{self.pth_path}/epoch_pth' に保存)
+        self.pth_save_cycle = 2  # 学習モデル(pth) の保存サイクル('{self.pth_path}/epoch_pth/' に保存)
         self.test_cycle = 1  # 学習モデルの test サイクル
 
         # 使用する画像(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
         # self.image_path = r'./recognition_datasets/Images/'
-        self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
-        # self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+        # self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
+        self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
 
         # 間違えた画像の保存先
         self.false_path = r'./recognition_datasets/False/'
@@ -37,7 +37,7 @@ class GlobalVariables:
 
         """ ログ """
         self.is_save_debug_log = True  # コンソールの出力をファイルに書き出すかどうか
-        self.is_save_rate_log = False  # エポック毎の認識率を保存するかどうか
+        self.is_save_rate_log = True  # エポック毎の認識率を保存するかどうか
 
         # ログ(学習状況)の出力先
         self.log_path = r'./recognition_datasets/Logs/'
@@ -53,9 +53,10 @@ class GlobalVariables:
         # self.grad_cam_layer = 'conv5'
 
         # ===== COMPLEX SETTINGS =====
-        import datetime
-        self.filename_base = str(datetime.datetime.now().strftime(
-            "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
+        from datetime import datetime
+        # self.filename_base = str(datetime.datetime.now().strftime(
+        #     "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
+        self.filename_base = datetime.now().strftime('%Y%b%d_%Hh%Mm%Ss')
 
         """ want to do (unimplemented) """
         import torch.optim as optim

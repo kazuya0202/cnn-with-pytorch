@@ -4,9 +4,16 @@
   + or torchaudioのみ
 + tensorboard
   + 学習曲線の可視化
+  + loss ...
   + その他もろもろ
 + Grad CAM with pytorch
   + https://github.com/jacobgil/pytorch-grad-cam
++ テストの実行中は、...を /-\- の順にやってくやつにする
+  + print('/', end='\r') yield
+  + print('-', end='\r') yield
+  + print('\\', end='\r') yield
+  + print('-', end='\r') yield
++ 学習時にbatch_sizeが一定値より大きかったら、for回してN個ずつモデルに入力して、step()させる?
 
 ## TODO
 

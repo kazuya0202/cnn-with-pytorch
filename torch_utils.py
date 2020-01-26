@@ -8,6 +8,7 @@ import torch.optim as optim
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
+import tensorboardX as tbx
 
 # my packages
 import cnn
@@ -140,13 +141,15 @@ class Model:
         self.net: cnn.Net = x[0]
         self.optimizer: Union[optim.Adam, optim.SGD] = x[1]
         self.criterion: nn.CrossEntropyLoss = x[2]
+
+        self.tb_writer = tbx.SummaryWriter()
     # end of __init__()
 
     def __build_model(self, load_pth_path: Optional[str]):
         net = cnn.Net(input_size=self.image_size)  # network
 
         # optimizer = optim.SGD(self.net.parameters(), lr=0.01)
-        optimizer = optim.Adam(net.parameters(), lr=0.001)
+        optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=pow(10, -8))
         criterion = nn.CrossEntropyLoss()
 
         # is load
@@ -204,11 +207,13 @@ class TestModel:
         acc_list = _dict.copy()  # acc of each class
         all_size = _dict.copy()  # test size of each class
 
-        print('running ', end='', flush=True)
+        # print('running ', end='', flush=True)
+        robj = ul.RunningObject('test running ...')
 
         # test
         for data, label in self.test_data:
-            print('.', end='', flush=True)
+            # print('.', end='', flush=True)
+            print(f'{robj.main()}', end='', flush=True)
 
             data = data.to(device)
             label = label.to(device)
@@ -233,7 +238,7 @@ class TestModel:
                 acc_list[k] += (x == y).sum()  # match -> correct
                 all_size[k] += x.tolist().count(1)  # all size of each class
         # end of all test
-        print()
+        robj.finish()
 
         # calc each accuracy
         for k, _cls in self.model.classes.items():
@@ -273,12 +278,10 @@ class TrainModel:
         self.test_cycle = gv.test_cycle
         self.pth_save_cycle = gv.pth_save_cycle
 
-        # path of model following save cycle
-        self.pth_epoch_path = None
-
         # is save
         if gv.pth_save_cycle != 0:
-            self.pth_epoch_path = Path(gv.pth_path, f'epoch_pth_{gv.filename_base}')
+            # path of model following save cycle
+            self.pth_epoch_path = Path(gv.pth_path, 'epoch_pth', gv.filename_base)
             self.pth_epoch_path.mkdir(parents=True, exist_ok=True)
 
         self.logs = logs  # logs
@@ -299,25 +302,30 @@ class TrainModel:
             self.logs.log.writeline(f'\n----- Epoch: {ep + 1} -----')
 
             # batch process
-            for data, label in self.train_data:
-                data = data.to(device)  # data (to gpu / cpu)
-                label = label.to(device)  # label (to gpu / cpu)
+            for batch_idx, (datas, labels) in enumerate(self.train_data):
+                datas = datas.to(device)  # data (to gpu / cpu)
+                labels = labels.to(device)  # label (to gpu / cpu)
 
                 self.model.optimizer.zero_grad()  # init gradient
-                out = self.model.net(data).to(device)  # data into model
-                loss = self.model.criterion(out, label)  # calculate loss
+                out = self.model.net(datas).to(device)  # data into model
+                loss = self.model.criterion(out, labels)  # calculate loss
                 loss.backward()  # calculate gradient
                 self.model.optimizer.step()  # update parameters
 
+                batch_size = len(labels)
+
+                # tensorboard log
+                self.model.tb_writer.add_scalar(
+                    'data/total_loss', loss.item(), (ep + 1) * batch_idx * batch_size)
+
                 # label
                 predicted = torch.max(out.data, 1)[1].cpu().numpy()  # predict
-                label_ans = label.cpu().numpy()  # correct answer
+                label_ans = labels.cpu().numpy()  # correct answer
 
                 # count of matched label
                 cnt = (label_ans == predicted).sum()
 
                 # calc total
-                batch_size = len(label_ans)
                 total_acc += cnt
                 total_loss += loss * batch_size
 
@@ -368,19 +376,23 @@ class TrainModel:
                 if (ep + 1) % self.pth_save_cycle != 0 or (ep + 1) == self.epoch:
                     continue
 
-                # pth path
+                # pth
                 pt_params = [self.pth_epoch_path, '']
                 p = ul.create_file_path(*pt_params, head=f'epoch{ep + 1}', ext='pth')
 
-                debug_log = ul.DebugLog(f'Saving model to \'{p}\'')
+                progress = ul.ProgressLog(f'Saving model to \'{p}\'')
                 # self.model.save_model(p)  # save
-                debug_log.complete()
+                progress.complete()
 
                 # log
                 self.logs.log.writeline(f'Saved model to \'{p}\'')
 
             # break
             # end of this epoch
+
+        # export to json
+        self.model.tb_writer.export_scalars_to_json('./all_scalars.json')
+        self.model.tb_writer.close()
         # end of all epoch
     # end of [function] train
 # end of [class] TrainModel

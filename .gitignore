@@ -1,6 +1,7 @@
 recognition_datasets/**/*
 *.txt
-# ./classes.txt
+runs/
+all_scalars.json
 
 
 ### Python

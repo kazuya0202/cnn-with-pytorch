@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,11 @@ class Main:
     def execute(self):
         gv = _gv.GlobalVariables()
 
+        """ DEBUG NOW """
+        gv.is_save_debug_log = False
+        gv.is_save_rate_log = False
+        """ --------- """
+
         # if not exist, exit script
         if not Path(gv.image_path).exists():
             print(f'The directory \'{gv.image_path}\' does not exist.')
@@ -36,11 +42,11 @@ class Main:
 
         # update rate log
         if gv.is_save_rate_log:
-            p = ul.create_file_path(gv.log_path, gv.filename_base)
+            p = ul.create_file_path(gv.log_path, gv.filename_base, ext='csv')
             logs.set_rate(ul.LogFile(p, default_debug_ok=True))
 
         # ===== create datasets =====
-        debug_log = ul.DebugLog(f'Create dataset from \'{gv.image_path}\'')
+        progress = ul.ProgressLog(f'Create dataset from \'{gv.image_path}\'')
 
         # get input image size as tuple
         image_size = gv.image_size
@@ -63,7 +69,7 @@ class Main:
             transform=transform,
             is_shuffle=gv.is_shuffle_per_epoch)
 
-        debug_log.complete()
+        progress.complete()
 
         # classes
         for k, _cls in dataset.classes.items():
@@ -71,7 +77,7 @@ class Main:
         logs.log.writeline()
 
         # ===== create make required direcotry =====
-        debug_log = ul.DebugLog('Making required directory')
+        progress = ul.ProgressLog('Making required directory')
 
         # arguments of required path
         params = [
@@ -80,14 +86,14 @@ class Main:
             gv.pth_path]
 
         ul.make_directories(*params)
-        debug_log.complete()
+        progress.complete()
 
         # ===== network =====
-        debug_log = ul.DebugLog('Building CNN network')  # debug log
+        progress = ul.ProgressLog('Building CNN network')  # debug log
 
         model = tu.Model(self.device, dataset.classes, image_size)
 
-        debug_log.complete()
+        progress.complete()
 
         # ===== dataset model =====
         test_model = tu.TestModel(
@@ -112,10 +118,10 @@ class Main:
         pt_params = [gv.pth_path, gv.filename_base]
         p = ul.create_file_path(*pt_params, ext='pth')
 
-        debug_log = ul.DebugLog(f'Saving model to \'{p}\'')
+        progress = ul.ProgressLog(f'Saving model to \'{p}\'')
         # train_model.model.save_model(p)  # save
         logs.log.writeline(f'Saved model to \'{p}\'')
-        debug_log.complete()
+        progress.complete()
     # end of [function] execute
 
     def __create_custom_dataset(
