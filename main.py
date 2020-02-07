@@ -1,4 +1,4 @@
-from datetime import datetime
+# from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -14,9 +14,7 @@ import global_variables as _gv
 
 class Main:
     def __init__(self):
-        # GPU / CPU
-        self.device = torch.device(
-            'cuda' if torch.cuda.is_available() else 'cpu')
+        pass
     # end of [function] __init__
 
     def execute(self):
@@ -91,23 +89,19 @@ class Main:
         # ===== network =====
         progress = ul.ProgressLog('Building CNN network')  # debug log
 
-        model = tu.Model(self.device, dataset.classes, image_size)
+        model = tu.Model(dataset.classes, gv.use_gpu, image_size, logs)
 
         progress.complete()
 
         # ===== dataset model =====
-        test_model = tu.TestModel(
-            model=model,
-            test_data=test_data,
-            logs=logs)
+        test_model = tu.TestModel(model, test_data)
 
         train_model = tu.TrainModel(
             model=model,
             epoch=gv.epoch,
             train_data=train_data,
             test_model=test_model,
-            gv=gv,
-            logs=logs)
+            gv=gv)
 
         # exec
         train_model.train()  # train
@@ -120,7 +114,7 @@ class Main:
 
         progress = ul.ProgressLog(f'Saving model to \'{p}\'')
         # train_model.model.save_model(p)  # save
-        logs.log.writeline(f'Saved model to \'{p}\'')
+        logs.log.writeline(f'Saved model to \'{p}\'', debug_ok=False)
         progress.complete()
     # end of [function] execute
 

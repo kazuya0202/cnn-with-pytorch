@@ -14,7 +14,7 @@ class GlobalVariables:
         # self.image_size: tuple = (60, 60)  # 縦横が違う場合
         self.image_size: int = 60  # 縦横が同じ場合は省略可
 
-        self.epoch = 6  # エポック
+        self.epoch = 2  # エポック
         self.batch_size = 100  # バッチ(何枚ずつ行うか)
         self.extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']  # 拡張子
 
@@ -26,8 +26,8 @@ class GlobalVariables:
 
         # 使用する画像(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
         # self.image_path = r'./recognition_datasets/Images/'
-        # self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
-        self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+        self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
+        # self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
 
         # 間違えた画像の保存先
         self.false_path = r'./recognition_datasets/False/'
@@ -57,6 +57,8 @@ class GlobalVariables:
         # self.filename_base = str(datetime.datetime.now().strftime(
         #     "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
         self.filename_base = datetime.now().strftime('%Y%b%d_%Hh%Mm%Ss')
+
+        self.use_gpu = True
 
         """ want to do (unimplemented) """
         import torch.optim as optim

@@ -13,17 +13,18 @@ import tensorboardX as tbx
 # my packages
 import cnn
 import utils as ul
-import global_variables as gv
+import global_variables as _gv
 
 
 class Data:
-    def __init__(self, path: str, label: int):
-        self.path = path
-        self.label = label
+    def __init__(self, path: str, label: int, name: str):
+        self.path = path  # path
+        self.label = label  # label
+        self.name = name  # class name
     # end of [function] __init__
 
     def items(self):
-        return self.path, self.label
+        return self.path, self.label, self.name
     # end of [function] items
 # end of [class] Data
 
@@ -51,7 +52,31 @@ class CreateDataset:
 
         # train_list / test_list
         self.__get_all_datas()
+
+        # write config of model
+        self.__write_config()
     # end of [function] __init__
+
+    def __write_config(self):
+        # write classes
+        cls_file = ul.LogFile('./classes.txt', default_debug_ok=False)
+
+        for k, _cls in self.classes.items():
+            cls_file.writeline(f'{k}:{_cls}')
+
+        # train image path
+        train_txt = ul.LogFile('train_used_images.txt', default_debug_ok=False)
+        train_txt.writeline('--- Image used for training. ---')
+
+        for x in self.all_list['train']:
+            train_txt.writeline(x.path)
+
+        # test image path
+        test_txt = ul.LogFile('test_used_images.txt', default_debug_ok=False)
+        test_txt.writeline('--- Image used for testing. ---')
+
+        for x in self.all_list['test']:
+            test_txt.writeline(x.path)
 
     def __get_all_datas(self):
         """ Get All Datasets from each directory. """
@@ -66,12 +91,13 @@ class CreateDataset:
             xs = []
 
             for ext in self.extensions:
-                tmp = [Data(x.as_posix(), idx)
+                tmp = [Data(x.as_posix(), idx, _dir.name)
                        for x in _dir.glob(f'*.{ext}') if x.is_file()]
                 xs.extend(tmp)
 
             # split dataset
-            train, test = train_test_split(xs, test_size=self.test_size, shuffle=True)
+            train, test = train_test_split(
+                xs, test_size=self.test_size, shuffle=True)
             self.all_list['train'].extend(train)
             self.all_list['test'].extend(test)
 
@@ -82,16 +108,6 @@ class CreateDataset:
         self.test_all_size = len(self.all_list['test'])
 
         self.all_size = self.train_all_size + self.test_all_size
-
-        # write classes
-        ul.write_classes(self.classes)
-
-        # write uses train image path
-        # ul.write_used_image_path(self.all_list['train'], path='./train_used_images.txt')
-
-        # write used test image path
-        ul.write_used_image_path(self.all_list['test'], path='./test_used_images.txt')
-
     # end of [function] __get_all_datas
 # end of [class] CreateDataset
 
@@ -106,14 +122,14 @@ class CustomDataset(Dataset):
 
     def __getitem__(self, idx):
         x = self.target_list[idx]
-        img = Image.open(x.path)
-        img = img.convert('RGB')
+        path, label, name = x.items()
 
-        label = x.label
+        img = Image.open(path)
+        img = img.convert('RGB')
 
         if self.transform is not None:
             img = self.transform(img)
-        return img, label
+        return img, label, name
     # end of [function] __getitem__
 
     def __len__(self):
@@ -122,18 +138,59 @@ class CustomDataset(Dataset):
 # end of [class] CustomDataset
 
 
+"""
+Modelクラスの中にTrainModel、TestModel作るのかくほうが賢くね？
+"""
+
+
+class CreateModel():
+    def __init__(
+            self,
+            dataset: CreateDataset,
+            gv: _gv.GlobalVariables):
+
+        self.gv = gv
+
+        # image_size -> tuple はここでもっかいやるか、gvに再代入
+
+        # self.train_model
+        # self.test_model
+
+
+        self.__create_basic_model(
+            classes=dataset.classes,
+            use_gpu=gv.use_gpu,
+            image_size=gv.image_size,
+            logs=
+        )
+
+    def __create_basic_model(
+            self,
+            classes: dict,
+            use_gpu: bool,
+            image_size: tuple,
+            logs: Optional[ul.DebugRateLogs]
+            )
+
+
 class Model:
     def __init__(
             self,
-            device: torch.device,
             classes: dict,
+            use_gpu: bool = False,
             image_size: tuple = (60, 60),
+            logs: Optional[ul.DebugRateLogs] = None,
             load_pth_path: Optional[str] = None):
 
         # parameters
-        self.device = device
         self.classes = classes
         self.image_size = image_size
+
+        self.logs = logs if logs is not None \
+            else ul.DebugRateLogs()
+
+        use_gpu = torch.cuda.is_available() and use_gpu
+        self.device = torch.device('cuda' if use_gpu else 'cpu')
 
         # build model or load model
         x = self.__build_model(load_pth_path)
@@ -142,7 +199,7 @@ class Model:
         self.optimizer: Union[optim.Adam, optim.SGD] = x[1]
         self.criterion: nn.CrossEntropyLoss = x[2]
 
-        self.tb_writer = tbx.SummaryWriter()
+        self.writer = tbx.SummaryWriter()
     # end of __init__()
 
     def __build_model(self, load_pth_path: Optional[str]):
@@ -187,12 +244,11 @@ class TestModel:
     def __init__(
             self,
             model: Model,
-            test_data: DataLoader,
-            logs: ul.DebugRateLogs = ul.DebugRateLogs()):
+            test_data: DataLoader):
 
         self.model = model
         self.test_data = test_data
-        self.logs = logs
+        self.logs = model.logs
     # end of [function] __init__
 
     def test(self):
@@ -211,9 +267,10 @@ class TestModel:
         robj = ul.RunningObject('test running ...')
 
         # test
-        for data, label in self.test_data:
+        for data, label, name in self.test_data:
             # print('.', end='', flush=True)
-            print(f'{robj.main()}', end='', flush=True)
+            # print(f'{robj.main()}', end='', flush=True)
+            robj.flush()
 
             data = data.to(device)
             label = label.to(device)
@@ -258,33 +315,36 @@ class TestModel:
 # end of [class] TestMedel
 
 
-class TrainModel:
+class TrainModel():
     def __init__(
             self,
             model: Model,
             epoch: int,
             train_data: DataLoader,
             test_model: TestModel,
-            gv: gv.GlobalVariables = gv.GlobalVariables(),
-            logs: ul.DebugRateLogs = ul.DebugRateLogs()):
+            gv: Optional[_gv.GlobalVariables] = None):
 
         # parameters
         self.model = model  # Model
         self.epoch = epoch
         self.train_data = train_data
         self.test_model = test_model  # TestModel
+        self.logs = model.logs  # logs
 
         # cycle
         self.test_cycle = gv.test_cycle
         self.pth_save_cycle = gv.pth_save_cycle
 
+        if gv is None:
+            gv = _gv.GlobalVariables()
+
         # is save
         if gv.pth_save_cycle != 0:
             # path of model following save cycle
-            self.pth_epoch_path = Path(gv.pth_path, 'epoch_pth', gv.filename_base)
+            self.pth_epoch_path = Path(
+                gv.pth_path, 'epoch_pth', gv.filename_base)
             self.pth_epoch_path.mkdir(parents=True, exist_ok=True)
 
-        self.logs = logs  # logs
     # end [function] __init__
 
     def train(self):
@@ -294,6 +354,8 @@ class TrainModel:
         # switch to train
         self.model.net.train()
 
+        plot_point = 0  # for tensorboard
+
         # loop epoch
         for ep in range(self.epoch):
             total_loss = 0  # total loss
@@ -301,8 +363,9 @@ class TrainModel:
 
             self.logs.log.writeline(f'\n----- Epoch: {ep + 1} -----')
 
+            # loss_sum = 0
             # batch process
-            for batch_idx, (datas, labels) in enumerate(self.train_data):
+            for batch_idx, (datas, labels, name) in enumerate(self.train_data):
                 datas = datas.to(device)  # data (to gpu / cpu)
                 labels = labels.to(device)  # label (to gpu / cpu)
 
@@ -313,10 +376,12 @@ class TrainModel:
                 self.model.optimizer.step()  # update parameters
 
                 batch_size = len(labels)
+                # loss_sum += loss.item()
 
                 # tensorboard log
-                self.model.tb_writer.add_scalar(
-                    'data/total_loss', loss.item(), (ep + 1) * batch_idx * batch_size)
+                self.model.writer.add_scalar('data/loss', loss.item(), plot_point)
+                print('pltpoint', plot_point)
+                plot_point += 1
 
                 # label
                 predicted = torch.max(out.data, 1)[1].cpu().numpy()  # predict
@@ -364,35 +429,52 @@ class TrainModel:
             self.logs.log.writeline(f'Total acc: {total_acc}')
             self.logs.log.writeline('----------\n')
 
-            torch.cuda.empty_cache()  # clear memory
+            # torch.cuda.empty_cache()  # clear memory
 
             # exec test
-            if self.test_cycle:
-                self.test_model.test()  # test of model
+            if self.test_cycle != 0:
+                # cycle / not last epoch -> exec
+                if (ep + 1) % self.test_cycle == 0 and (ep + 1) != self.epoch:
+                    self.test_model.test()  # testing
+
+            # tensorboard
+            self.model.writer.add_scalar('data/total_loss', total_loss, ep + 1)
 
             # save pth
             if self.pth_save_cycle != 0:
-                # not cycle / last epoch -> continue
-                if (ep + 1) % self.pth_save_cycle != 0 or (ep + 1) == self.epoch:
-                    continue
+                # cycle / not last epoch -> exec
+                if (ep + 1) % self.pth_save_cycle == 0 and (ep + 1) != self.epoch:
 
-                # pth
-                pt_params = [self.pth_epoch_path, '']
-                p = ul.create_file_path(*pt_params, head=f'epoch{ep + 1}', ext='pth')
+                    pt_params = [self.pth_epoch_path, '']
+                    p = ul.create_file_path(*pt_params, head=f'epoch{ep + 1}', ext='pth')
 
-                progress = ul.ProgressLog(f'Saving model to \'{p}\'')
-                # self.model.save_model(p)  # save
-                progress.complete()
+                    progress = ul.ProgressLog(f'Saving model to \'{p}\'')
+                    # self.model.save_model(p)  # save
+                    progress.complete()
 
-                # log
-                self.logs.log.writeline(f'Saved model to \'{p}\'')
+                    # log
+                    self.logs.log.writeline(f'Saved model to \'{p}\'', debug_ok=False)
 
             # break
             # end of this epoch
 
-        # export to json
-        self.model.tb_writer.export_scalars_to_json('./all_scalars.json')
-        self.model.tb_writer.close()
+        # export as json
+        self.model.writer.export_scalars_to_json('./all_scalars.json')
+        self.model.writer.close()
+
         # end of all epoch
     # end of [function] train
 # end of [class] TrainModel
+
+
+class ValidModel():
+    def __init__(self, model: Model):
+        self.model = model
+    # end of [function] __init__
+
+    def valid(self, image):
+        # self.model.net(image) ...
+
+        pass
+    # end of [function] valid
+# end of [class] ValidModel

@@ -129,35 +129,22 @@ def load_classes(path='./classes.txt'):
 # end of [function] load_classes
 
 
-def write_classes(classes: dict, path='./classes.txt'):
-    cls_file = LogFile(path, default_debug_ok=False)
-
-    for k, _cls in classes.items():
-        cls_file.writeline(f'{k}:{_cls}')
-# end of [function] write_classes
-
-
-def write_used_image_path(_list: list, path='./used_images.txt'):
-    _file = LogFile(path, default_debug_ok=False)
-
-    for x in _list:
-        _file.writeline(x.path)
-
-
 class RunningObject():
     def __init__(self, head: str = ''):
         self.cnt = 0
         self.head = head
-
-    def main(self):
-        x = self.cnt % 4
-
-        ret = '/' if x == 0 \
-            else '-' if x == 1 or x == 3 \
-            else '\\'
-
-        self.cnt += 1
-        return f'\r{self.head}{ret}'
+        self.content = ['\\', '-', '/', '-']
 
     def finish(self):
         print()
+
+    def __next_obj(self):
+        idx = self.cnt % 4
+        obj = self.content[idx]
+        self.cnt += 1
+
+        return obj
+
+    def flush(self):
+        obj = self.__next_obj()
+        print(f'\r{self.head} {obj}', end='', flush=True)
