@@ -26,8 +26,8 @@ class GlobalVariables:
 
         # 使用する画像(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
         # self.image_path = r'./recognition_datasets/Images/'
-        self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
-        # self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+        # self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
+        self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
 
         # 間違えた画像の保存先
         self.false_path = r'./recognition_datasets/False/'

@@ -2,8 +2,13 @@ from pathlib import Path
 from typing import Optional, Union
 
 
-class LogFile:
-    def __init__(self, path: Optional[str], default_debug_ok: bool = True):
+class LogFile():
+    def __init__(
+            self,
+            path: Optional[str],
+            default_debug_ok: bool = True,
+            clear: bool = False):
+
         self.all_debug_ok = default_debug_ok
         if path is None:
             self.path = path
@@ -11,29 +16,34 @@ class LogFile:
 
         self.path = Path(path)
 
+        if clear:
+            # clear
+            self.clear_all()
+
         # create output dir
         if not self.path.parent.exists():
             self.path.parent.mkdir(parents=True)
 
-        # create output file
-        self.path.touch()
+        if not self.path.exists():
+            # create output file
+            self.path.touch()
     # end of [function] __init__
 
-    def write(self, line='', debug_ok: bool = False):
+    def write(self, line='', debug_ok: Optional[bool] = None):
         if self.__is_write():
             with self.path.open('a') as f:
                 f.write(line)
 
-        if self.all_debug_ok or debug_ok:
+        if self.__debug_ok(debug_ok):
             print(f'\r{line}', end='')
     # end of [function] write
 
-    def writeline(self, line='', debug_ok: bool = False):
+    def writeline(self, line='', debug_ok: Optional[bool] = None):
         if self.__is_write():
             with self.path.open('a') as f:
                 f.write(f'{line}\n')
 
-        if self.all_debug_ok or debug_ok:
+        if self.__debug_ok(debug_ok):
             print(line)
     # end of [function] writeline
 
@@ -45,6 +55,17 @@ class LogFile:
     def __is_write(self):
         return self.path is not None
     # end of [function] __is_write
+
+    def __debug_ok(self, debug_ok):
+        if debug_ok is not None:
+            # priority `debug_ok`
+            if debug_ok:
+                return True
+        elif self.all_debug_ok:
+            return True
+
+        return False
+    # end of [function] __debug_ok
 # end of [class] LogFile
 
 
@@ -68,6 +89,18 @@ class DebugRateLogs():
 # end of [class] DebugRateLogs
 
 
+def new(name: str, data: dict):
+    """
+    Usage:
+        obj = new('Obj', {'x': 1, 'y': 2})
+
+        print(obj.x)
+        print(obj.y)
+    """
+    return type(name, (object,), data)
+# end of [function] new
+
+
 def create_file_path(
         dir_path: Union[str, Path],
         name: str,
@@ -84,7 +117,7 @@ def create_file_path(
 # end of [function] create_file_path
 
 
-class ProgressLog:
+class ProgressLog():
     def __init__(self, line):
         self.line = line
         self.progress()
@@ -130,6 +163,14 @@ def load_classes(path='./classes.txt'):
 
 
 class RunningObject():
+    """
+    Usage:
+        robj = RunningObject('testing ...')
+        for ... :
+            robj.flush()
+        robj.finish()
+    """
+
     def __init__(self, head: str = ''):
         self.cnt = 0
         self.head = head

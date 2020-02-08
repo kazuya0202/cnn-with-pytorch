@@ -21,8 +21,8 @@ class Main:
         gv = _gv.GlobalVariables()
 
         """ DEBUG NOW """
-        gv.is_save_debug_log = False
-        gv.is_save_rate_log = False
+        # gv.is_save_debug_log = False
+        # gv.is_save_rate_log = False
         """ --------- """
 
         # if not exist, exit script
@@ -61,7 +61,7 @@ class Main:
             extensions=gv.extensions,
             test_size=gv.test_size)
 
-        train_data, test_data = self.__create_custom_dataset(
+        train_data, unknown_data, known_data = self.__create_custom_dataset(
             dataset=dataset,
             batch_size=gv.batch_size,
             transform=transform,
@@ -72,7 +72,7 @@ class Main:
         # classes
         for k, _cls in dataset.classes.items():
             logs.log.writeline(f'{k}: {_cls}')
-        logs.log.writeline()
+        print()
 
         # ===== create make required direcotry =====
         progress = ul.ProgressLog('Making required directory')
@@ -89,12 +89,12 @@ class Main:
         # ===== network =====
         progress = ul.ProgressLog('Building CNN network')  # debug log
 
-        model = tu.Model(dataset.classes, gv.use_gpu, image_size, logs)
+        model = tu.Model(dataset, gv.use_gpu, image_size, logs)
 
         progress.complete()
 
         # ===== dataset model =====
-        test_model = tu.TestModel(model, test_data)
+        test_model = tu.TestModel(model, unknown_data, known_data)
 
         train_model = tu.TrainModel(
             model=model,
@@ -125,31 +125,20 @@ class Main:
             transform: transforms,
             is_shuffle: bool):
 
-        # train dataset, shuffle
-        train_dataset = tu.CustomDataset(
-            dataset=dataset,
-            target='train',
-            transform=transform)
+        # train dataset / test dataset
+        train_dataset = tu.CustomDataset(dataset, 'train', transform)
+        unknown_dataset = tu.CustomDataset(dataset, 'unknown', transform)
+        known_dataset = tu.CustomDataset(dataset, 'known', transform)
 
-        train_data = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True)
+        # batch size for testing
+        test_batch = int(np.ceil(batch_size / 10.0))
 
-        # test dataset, shuffle
-        test_dataset = tu.CustomDataset(
-            dataset=dataset,
-            target='test',
-            transform=transform)
+        # train dataloader / test dataloader, shuffle
+        train_data = DataLoader(train_dataset, batch_size, is_shuffle)
+        unknown_data = DataLoader(unknown_dataset, test_batch, is_shuffle)
+        known_data = DataLoader(known_dataset, test_batch, is_shuffle)
 
-        batch = int(np.ceil(batch_size / 10.0))
-
-        test_data = DataLoader(
-            test_dataset,
-            batch_size=batch,
-            shuffle=True)
-
-        return train_data, test_data
+        return (train_data, unknown_data, known_data)
     # end of [function] __create_custom_dataset
 
     def print_parameter_config(self):

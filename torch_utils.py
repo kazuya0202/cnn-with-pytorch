@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional, Union
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -9,6 +10,8 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import Dataset, DataLoader
 import tensorboardX as tbx
+from tqdm import tqdm
+import random
 
 # my packages
 import cnn
@@ -40,13 +43,14 @@ class CreateDataset:
         self.extensions = extensions
         self.test_size = test_size
 
-        self.all_list = {}  # {'train': [], 'test': []}
+        self.all_list = {}  # {'train': [], 'unknown': [], 'known': []}
         self.classes = {}  # {'label': 'class name' ...}
 
         # size of images
-        self.all_size = 0
-        self.train_all_size = 0
-        self.test_all_size = 0
+        self.all_size = 0  # train_size + unknown_size
+        self.train_size = 0
+        self.unknown_size = 0
+        self.known_size = 0
 
         # ----------
 
@@ -58,29 +62,51 @@ class CreateDataset:
     # end of [function] __init__
 
     def __write_config(self):
-        # write classes
-        cls_file = ul.LogFile('./classes.txt', default_debug_ok=False)
+        _dir = Path('config')
+        _dir.mkdir(parents=True, exist_ok=True)
 
-        for k, _cls in self.classes.items():
-            cls_file.writeline(f'{k}:{_cls}')
+        # -- write classes
+        path = _dir.joinpath('classes.txt')
+        with open(path, 'w') as f:
+            for k, _cls in self.classes.items():
+                f.write(f'{k}:{_cls}\n')
 
-        # train image path
-        train_txt = ul.LogFile('train_used_images.txt', default_debug_ok=False)
-        train_txt.writeline('--- Image used for training. ---')
+        # # -- train image path
+        path = _dir.joinpath('train_used_images.txt')
+        with open(path, 'w') as f:
+            f.write('--- Image used for training. ---\n')
 
-        for x in self.all_list['train']:
-            train_txt.writeline(x.path)
+            for x in self.all_list['train']:
+                p = Path(x.path).absolute()
+                f.write(p.as_posix() + '\n')
 
-        # test image path
-        test_txt = ul.LogFile('test_used_images.txt', default_debug_ok=False)
-        test_txt.writeline('--- Image used for testing. ---')
+        # # -- unknown image path
+        path = _dir.joinpath('unknown_used_images.txt')
+        with open(path, 'w') as f:
+            f.write('--- Image used for unknown testing. ---\n')
 
-        for x in self.all_list['test']:
-            test_txt.writeline(x.path)
+            for x in self.all_list['unknown']:
+                p = Path(x.path).absolute()
+                f.write(p.as_posix() + '\n')
+
+        # # -- known image path
+        path = _dir.joinpath('known_used_images.txt')
+        with open(path, 'w') as f:
+            f.write('--- Image used for known testing. ---\n')
+
+            for x in self.all_list['known']:
+                p = Path(x.path).absolute()
+                f.write(p.as_posix() + '\n')
+    # end of [function] __write_config
 
     def __get_all_datas(self):
         """ Get All Datasets from each directory. """
-        self.all_list = {'train': [], 'test': []}  # init
+        # init
+        self.all_list = {
+            'train': [],
+            'unknown': [],
+            'known': []
+        }
         path = Path(self.path)
 
         # directories in [image_path]
@@ -99,15 +125,17 @@ class CreateDataset:
             train, test = train_test_split(
                 xs, test_size=self.test_size, shuffle=True)
             self.all_list['train'].extend(train)
-            self.all_list['test'].extend(test)
+            self.all_list['unknown'].extend(test)
+            self.all_list['known'].extend(random.sample(train, len(test)))
 
             # self.classes[_dir.name] = idx
             self.classes[str(idx)] = _dir.name
 
-        self.train_all_size = len(self.all_list['train'])
-        self.test_all_size = len(self.all_list['test'])
+        self.train_size = len(self.all_list['train'])
+        self.unknown_size = len(self.all_list['unknown'])
+        self.known_size = len(self.all_list['known'])
 
-        self.all_size = self.train_all_size + self.test_all_size
+        self.all_size = self.train_size + self.unknown_size
     # end of [function] __get_all_datas
 # end of [class] CreateDataset
 
@@ -138,52 +166,24 @@ class CustomDataset(Dataset):
 # end of [class] CustomDataset
 
 
-"""
-Modelクラスの中にTrainModel、TestModel作るのかくほうが賢くね？
-"""
-
-
-class CreateModel():
-    def __init__(
-            self,
-            dataset: CreateDataset,
-            gv: _gv.GlobalVariables):
-
-        self.gv = gv
-
-        # image_size -> tuple はここでもっかいやるか、gvに再代入
-
-        # self.train_model
-        # self.test_model
-
-
-        self.__create_basic_model(
-            classes=dataset.classes,
-            use_gpu=gv.use_gpu,
-            image_size=gv.image_size,
-            logs=
-        )
-
-    def __create_basic_model(
-            self,
-            classes: dict,
-            use_gpu: bool,
-            image_size: tuple,
-            logs: Optional[ul.DebugRateLogs]
-            )
-
-
 class Model:
     def __init__(
             self,
-            classes: dict,
+            dataset: CreateDataset,
             use_gpu: bool = False,
             image_size: tuple = (60, 60),
             logs: Optional[ul.DebugRateLogs] = None,
             load_pth_path: Optional[str] = None):
 
+        # self.train_model = None
+        # self.test_model = None
+
+        # self.train_data = None
+        # self.test_data = None
+
         # parameters
-        self.classes = classes
+        self.dataset = dataset
+        self.classes = dataset.classes
         self.image_size = image_size
 
         self.logs = logs if logs is not None \
@@ -244,73 +244,83 @@ class TestModel:
     def __init__(
             self,
             model: Model,
-            test_data: DataLoader):
+            unknown_data: DataLoader,
+            known_data: DataLoader):
 
         self.model = model
-        self.test_data = test_data
-        self.logs = model.logs
+        self.unknown_data = unknown_data
+        self.known_data = known_data
+
+        self.log = model.logs.log  # log
+        self.rate = model.logs.rate  # rate
     # end of [function] __init__
 
     def test(self):
         # switch to test
         self.model.net.eval()
 
-        self.logs.log.writeline('Start test.\n')
+        self.log.writeline('# Start testing.\n', False)
         device = self.model.device  # device
-        total_acc = 0  # total accuracy
 
-        _dict = dict([(_cls, 0) for _cls in self.model.classes.keys()])
-        acc_list = _dict.copy()  # acc of each class
-        all_size = _dict.copy()  # test size of each class
+        def __execute(data_loader: DataLoader, tqdm_desc: str = ''):
+            total_acc = 0  # total accuracy
 
-        # print('running ', end='', flush=True)
-        robj = ul.RunningObject('test running ...')
+            _dict = dict([(_cls, 0) for _cls in self.model.classes.keys()])
+            acc_list = _dict.copy()  # acc of each class
+            all_size = _dict.copy()  # test size of each class
 
-        # test
-        for data, label, name in self.test_data:
-            # print('.', end='', flush=True)
-            # print(f'{robj.main()}', end='', flush=True)
-            robj.flush()
+            # test
+            # pbar = tqdm(self.unknown_data, total=len(self.unknown_data),
+            pbar = tqdm(data_loader, total=len(data_loader),
+                        ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
+            pbar.set_description(tqdm_desc)
 
-            data = data.to(device)
-            label = label.to(device)
+            # for data, label, name in self.test_data:
+            for datas, labels, name in pbar:
+                datas = datas.to(device)
+                labels = labels.to(device)
 
-            # data into model
-            out = self.model.net(data).to(device)
+                # data into model
+                out = self.model.net(datas).to(device)
 
-            # label
-            predicted = torch.max(out.data, 1)[1].cpu().numpy()  # predict
-            label_ans = label.cpu().numpy()  # correct answer
+                # label
+                predicted = torch.max(out.data, 1)[1].cpu().numpy()  # predict
+                label_ans = labels.cpu().numpy()  # correct answer
 
-            # label of correct answer
-            # count of matched label, and it add to total_acc
-            for k in acc_list.keys():
-                t = int(k)
+                # label of correct answer
+                # count of matched label, and it add to total_acc
+                for k in acc_list.keys():
+                    t = int(k)
 
-                # match -> 1, else -> -1 / -2
-                x = np.where(label_ans == t, 1, -1)
-                y = np.where(predicted == t, 1, -2)
+                    # match -> 1, else -> -1 / -2
+                    x = np.where(label_ans == t, 1, -1)
+                    y = np.where(predicted == t, 1, -2)
 
-                # print(k, (x == y).sum(), x.tolist().count(1))
-                acc_list[k] += (x == y).sum()  # match -> correct
-                all_size[k] += x.tolist().count(1)  # all size of each class
-        # end of all test
-        robj.finish()
+                    acc_list[k] += (x == y).sum()  # match -> correct
+                    all_size[k] += x.tolist().count(1)  # all size of each class
+            # end of all test
 
-        # calc each accuracy
-        for k, _cls in self.model.classes.items():
-            acc = round(acc_list[k] / all_size[k], 4)
-            total_acc += acc
+            # calc each accuracy
+            for k, _cls in self.model.classes.items():
+                acc = round(acc_list[k] / all_size[k], 4)
+                total_acc += acc
 
-            _cls = f'[{_cls}]'
+                _cls = f'[{_cls}]'
 
-            ss = f'{_cls:<12} acc: {acc:<6} ({acc_list[k]} / {all_size[k]} images.)'
-            self.logs.log.writeline(ss)
-        # end of calculate accuracy of each class and total
+                print('  ', end='')
+                ss = f'{_cls:<12} -> acc: {acc:<6} ({acc_list[k]} / {all_size[k]} images.)'
+                self.log.writeline(ss)
+            # end of calculate accuracy of each class and total
+            self.log.writeline()
 
-        # total accuracy
-        total_acc /= len(self.model.classes)
-        self.logs.log.writeline(f'\nTotal acc: {total_acc}')
+            # total accuracy
+            total_acc /= len(self.model.classes)
+            print('  ', end='')
+            self.log.writeline(f'Total acc: {total_acc}\n')
+        # end of [function] __execute
+
+        __execute(self.unknown_data, 'TEST [unknonw]')  # unknown test
+        __execute(self.known_data, 'TEST [ known ]')  # knwon test
     # end of [function] test
 # end of [class] TestMedel
 
@@ -329,7 +339,9 @@ class TrainModel():
         self.epoch = epoch
         self.train_data = train_data
         self.test_model = test_model  # TestModel
-        self.logs = model.logs  # logs
+
+        self.log = model.logs.log  # log
+        self.rate = model.logs.rate  # rate
 
         # cycle
         self.test_cycle = gv.test_cycle
@@ -348,7 +360,7 @@ class TrainModel():
     # end [function] __init__
 
     def train(self):
-        self.logs.log.writeline('Start training.')
+        self.log.writeline('# Start training.', False)
         device = self.model.device
 
         # switch to train
@@ -361,11 +373,13 @@ class TrainModel():
             total_loss = 0  # total loss
             total_acc = 0  # total accuracy
 
-            self.logs.log.writeline(f'\n----- Epoch: {ep + 1} -----')
+            self.log.writeline(f'----- Epoch: {ep + 1} -----')
 
-            # loss_sum = 0
             # batch process
-            for batch_idx, (datas, labels, name) in enumerate(self.train_data):
+            pbar = tqdm(enumerate(self.train_data), total=len(self.train_data),
+                        ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
+
+            for batch_idx, (datas, labels, name) in pbar:
                 datas = datas.to(device)  # data (to gpu / cpu)
                 labels = labels.to(device)  # label (to gpu / cpu)
 
@@ -376,11 +390,9 @@ class TrainModel():
                 self.model.optimizer.step()  # update parameters
 
                 batch_size = len(labels)
-                # loss_sum += loss.item()
 
                 # tensorboard log
                 self.model.writer.add_scalar('data/loss', loss.item(), plot_point)
-                print('pltpoint', plot_point)
                 plot_point += 1
 
                 # label
@@ -411,10 +423,14 @@ class TrainModel():
                     label_ans_str = np.array2string(label_ans)
                     predicted_str = np.array2string(predicted)
 
+                pbar.set_description(f'TRAIN')
+                pbar.set_postfix(
+                    ordered_dict=OrderedDict(loss=f'{loss:<8}', acc=f'{acc:<8}'))
+
                 # log
                 ss = f'ans: {label_ans_str} / result: {predicted_str}'
                 ss += f' / loss: {loss:<8} / acc: {acc:<8}'.rstrip()
-                self.logs.log.writeline(ss)
+                self.log.writeline(ss, False)
 
                 # break
                 # end of this batch
@@ -424,10 +440,13 @@ class TrainModel():
             total_acc = total_acc / len(self.train_data.dataset)
 
             # log
-            self.logs.log.writeline('\n----------')
-            self.logs.log.writeline(f'Total loss: {total_loss}')
-            self.logs.log.writeline(f'Total acc: {total_acc}')
-            self.logs.log.writeline('----------\n')
+            self.log.writeline('\n---------------', False)
+            print('  ', end='')
+            self.log.writeline(f'Total loss: {total_loss}')
+            print('  ', end='')
+            self.log.writeline(f'Total acc: {total_acc}')
+            print()
+            self.log.writeline('---------------\n', False)
 
             # torch.cuda.empty_cache()  # clear memory
 
@@ -453,7 +472,7 @@ class TrainModel():
                     progress.complete()
 
                     # log
-                    self.logs.log.writeline(f'Saved model to \'{p}\'', debug_ok=False)
+                    self.log.writeline(f'# Saved model to \'{p}\'', debug_ok=False)
 
             # break
             # end of this epoch
