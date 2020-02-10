@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
 
 
+@dataclass(init=False)
 class LogFile():
     def __init__(
             self,
@@ -16,16 +18,15 @@ class LogFile():
 
         self.path = Path(path)
 
+        # clear
         if clear:
-            # clear
             self.clear_all()
 
         # create output dir
-        if not self.path.parent.exists():
-            self.path.parent.mkdir(parents=True)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
 
+        # create output file
         if not self.path.exists():
-            # create output file
             self.path.touch()
     # end of [function] __init__
 
@@ -69,6 +70,7 @@ class LogFile():
 # end of [class] LogFile
 
 
+@dataclass(init=False)
 class DebugRateLogs():
     def __init__(
             self,
@@ -105,6 +107,7 @@ def create_file_path(
         dir_path: Union[str, Path],
         name: str,
         head: Optional[str] = None,
+        end: str = '',
         ext='txt'):
 
     parent = Path(dir_path)
@@ -112,11 +115,12 @@ def create_file_path(
     _head = head if head is not None \
         else str(len([x for x in parent.glob(f'*.{ext}')])) + '_'
 
-    path = parent.joinpath(f'{_head}{name}.{ext}')
+    path = parent.joinpath(f'{_head}{name}{end}.{ext}')
     return path.as_posix()
 # end of [function] create_file_path
 
 
+@dataclass(init=False)
 class ProgressLog():
     def __init__(self, line):
         self.line = line
@@ -144,24 +148,28 @@ def make_directories(*args):
 # end of [function] make_directories
 
 
-def load_classes(path='./classes.txt'):
+def load_classes(path='config/classes.txt'):
     path = Path(path)
     classes = {}
 
-    text = path.read_text()
-    lines = text.split('\n')
+    if not path.exists():
+        return classes
+
+    lines = path.read_text().split('\n')
 
     for line in lines:
-        x, y = line.split(':')
-        x = x.strip()
-        y = y.strip()
+        _list = line.split(':')
+        if len(_list) < 2:
+            continue
 
-        classes[x] = y
+        x, y = list(map(lambda x: x.strip(), _list))
+        classes[int(x)] = y
 
     return classes
 # end of [function] load_classes
 
 
+@dataclass(init=False)
 class RunningObject():
     """
     Usage:

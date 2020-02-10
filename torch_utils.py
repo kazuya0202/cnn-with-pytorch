@@ -1,30 +1,37 @@
-from pathlib import Path
-from typing import Optional, Union
+import random
 from collections import OrderedDict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
+import tensorboardX as tbx
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch.utils.data import Dataset, DataLoader
-import tensorboardX as tbx
+from torch.utils.data import DataLoader, Dataset
+from torchvision import transforms
 from tqdm import tqdm
-import random
 
 # my packages
 import cnn
-import utils as ul
 import global_variables as _gv
+import utils as ul
 
 
+@dataclass
 class Data:
-    def __init__(self, path: str, label: int, name: str):
-        self.path = path  # path
-        self.label = label  # label
-        self.name = name  # class name
-    # end of [function] __init__
+    path: str  # path
+    label: int  # label
+    name: str  # name
+
+    # def __init__(self, path: str, label: int, name: str):
+    #     self.path = path  # path
+    #     self.label = label  # label
+    #     self.name = name  # class name
+    # # end of [function] __init__
 
     def items(self):
         return self.path, self.label, self.name
@@ -32,6 +39,7 @@ class Data:
 # end of [class] Data
 
 
+@dataclass(init=False)
 class CreateDataset:
     def __init__(
             self,
@@ -39,18 +47,18 @@ class CreateDataset:
             extensions: list,
             test_size: Union[float, int]):
 
-        self.path = path
-        self.extensions = extensions
-        self.test_size = test_size
+        self.path: str = path
+        self.extensions: List[str] = extensions
+        self.test_size: Union[float, int] = test_size
 
-        self.all_list = {}  # {'train': [], 'unknown': [], 'known': []}
-        self.classes = {}  # {'label': 'class name' ...}
+        self.all_list: Dict[str, list] = {}  # {'train': [], 'unknown': [], 'known': []}
+        self.classes: Dict[int, str] = {}  # {label: 'class name' ...}
 
         # size of images
-        self.all_size = 0  # train_size + unknown_size
-        self.train_size = 0
-        self.unknown_size = 0
-        self.known_size = 0
+        self.all_size: int  # train_size + unknown_size
+        self.train_size: int
+        self.unknown_size: int
+        self.known_size: int
 
         # ----------
 
@@ -65,11 +73,11 @@ class CreateDataset:
         _dir = Path('config')
         _dir.mkdir(parents=True, exist_ok=True)
 
-        # -- write classes
-        path = _dir.joinpath('classes.txt')
-        with open(path, 'w') as f:
-            for k, _cls in self.classes.items():
-                f.write(f'{k}:{_cls}\n')
+        # # -- write classes
+        # path = _dir.joinpath('classes.txt')
+        # with open(path, 'w') as f:
+        #     for k, _cls in self.classes.items():
+        #         f.write(f'{k}:{_cls}\n')
 
         # # -- train image path
         path = _dir.joinpath('train_used_images.txt')
@@ -95,18 +103,17 @@ class CreateDataset:
             f.write('--- Image used for known testing. ---\n')
 
             for x in self.all_list['known']:
-                p = Path(x.path).absolute()
+                p = Path(x.path).resolve()
                 f.write(p.as_posix() + '\n')
     # end of [function] __write_config
 
     def __get_all_datas(self):
         """ Get All Datasets from each directory. """
-        # init
         self.all_list = {
             'train': [],
             'unknown': [],
-            'known': []
-        }
+            'known': [],
+        }  # init
         path = Path(self.path)
 
         # directories in [image_path]
@@ -129,7 +136,7 @@ class CreateDataset:
             self.all_list['known'].extend(random.sample(train, len(test)))
 
             # self.classes[_dir.name] = idx
-            self.classes[str(idx)] = _dir.name
+            self.classes[idx] = _dir.name
 
         self.train_size = len(self.all_list['train'])
         self.unknown_size = len(self.all_list['unknown'])
@@ -140,10 +147,11 @@ class CreateDataset:
 # end of [class] CreateDataset
 
 
+@dataclass(init=False)
 class CustomDataset(Dataset):
     def __init__(self, dataset: CreateDataset, target='train', transform=None):
-        self.transform = transform
         self.dataset = dataset
+        self.transform = transform
         self.target_list = self.dataset.all_list[target]
         self.list_size = len(self.target_list)
     # end of [function] __init__
@@ -166,86 +174,115 @@ class CustomDataset(Dataset):
 # end of [class] CustomDataset
 
 
+@dataclass(init=False)
 class Model:
     def __init__(
             self,
-            dataset: CreateDataset,
+            # dataset: CreateDataset,
+            classes: Optional[dict] = None,
             use_gpu: bool = False,
-            image_size: tuple = (60, 60),
+            image_size: Tuple[int, int] = (60, 60),
             logs: Optional[ul.DebugRateLogs] = None,
-            load_pth_path: Optional[str] = None):
+            load_pth_path: Optional[str] = None) -> None:
+        """
+        `load_pth_path` is not None -> load pth automatically.
+        """
 
-        # self.train_model = None
-        # self.test_model = None
+        # network
+        self.net: cnn.Net
+        self.optimizer: Union[optim.Adam, optim.SGD]
+        self.criterion: nn.CrossEntropyLoss
 
-        # self.train_data = None
-        # self.test_data = None
-
-        # parameters
-        self.dataset = dataset
-        self.classes = dataset.classes
+        self.classes: dict  # class
         self.image_size = image_size
 
+        # gpu setting
+        self.use_gpu = torch.cuda.is_available() and use_gpu
+        self.device = torch.device('cuda' if use_gpu else 'cpu')
+
+        # tensorboard
+        self.writer = tbx.SummaryWriter()
+
+        # assign or load from classes.txt
+        if load_pth_path is None:
+            self.classes = classes if classes is not None \
+                else ul.load_classes().copy()
+
+        # assign or create instance
         self.logs = logs if logs is not None \
             else ul.DebugRateLogs()
 
-        use_gpu = torch.cuda.is_available() and use_gpu
-        self.device = torch.device('cuda' if use_gpu else 'cpu')
+        # build model by cnn.py or load model
+        self.__build_model(load_pth_path)
 
-        # build model or load model
-        x = self.__build_model(load_pth_path)
+        # save classes
+        self.__write_classes()
 
-        self.net: cnn.Net = x[0]
-        self.optimizer: Union[optim.Adam, optim.SGD] = x[1]
-        self.criterion: nn.CrossEntropyLoss = x[2]
-
-        self.writer = tbx.SummaryWriter()
+        # classes.txt is EOF, classes is None
+        if self.classes is {}:
+            print('classes is {}')
     # end of __init__()
 
     def __build_model(self, load_pth_path: Optional[str]):
-        net = cnn.Net(input_size=self.image_size)  # network
+        self.net = cnn.Net(input_size=self.image_size)  # network
 
         # optimizer = optim.SGD(self.net.parameters(), lr=0.01)
-        optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=pow(10, -8))
-        criterion = nn.CrossEntropyLoss()
+        self.optimizer = optim.Adam(self.net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=pow(10, -8))
+        self.criterion = nn.CrossEntropyLoss()
 
         # is load
         if load_pth_path is None:
-            net.zero_grad()  # init all gradient
+            self.net.zero_grad()  # init all gradient
         else:
+            # check exist
+            if not Path(load_pth_path).exists():
+                print(f'{load_pth_path} is not exist.')
+
             # load checkpoint
             checkpoint = torch.load(load_pth_path)
 
             # classes, network
             self.classes = checkpoint['classes']
-            net.load_state_dict(checkpoint['model_state_dict'])
+            self.net.load_state_dict(checkpoint['model_state_dict'])
 
             # epoch = checkpoint['epoch']
             # criterion = checkpoint['criterion']
             # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
-        net.to(self.device)  # switch to GPU / CPU
-        return net, optimizer, criterion
+        self.net.to(self.device)  # switch to GPU / CPU
     # end of __build_model()
 
-    def save_model(self, path: str, epoch: Optional[int] = None):
+    def save_model(self, path: str, epoch: Optional[int] = None) -> None:
         torch.save({
             'classes': self.classes,
             'model_state_dict': self.net.state_dict(),
+
             # 'epoch': epoch,
             # 'optimizer_state_dict': self.optimizer.state_dict(),
             # 'criterion': type(self.criterion).__name__
         }, path)
     # end of [function] save_model
+
+    def __write_classes(self):
+        _dir = Path('config')
+        _dir.mkdir(parents=True, exist_ok=True)
+
+        # -- write classes
+        path = _dir.joinpath('classes.txt')
+        with open(path, 'w') as f:
+            for k, _cls in self.classes.items():
+                f.write(f'{k}:{_cls}\n')
+    # end of [function] __write_classes
 # end of [class] Model
 
 
+@dataclass(init=False)
 class TestModel:
     def __init__(
             self,
             model: Model,
             unknown_data: DataLoader,
-            known_data: DataLoader):
+            known_data: DataLoader = None):
 
         self.model = model
         self.unknown_data = unknown_data
@@ -255,7 +292,7 @@ class TestModel:
         self.rate = model.logs.rate  # rate
     # end of [function] __init__
 
-    def test(self):
+    def test(self, epoch=None):
         # switch to test
         self.model.net.eval()
 
@@ -317,14 +354,19 @@ class TestModel:
             total_acc /= len(self.model.classes)
             print('  ', end='')
             self.log.writeline(f'Total acc: {total_acc}\n')
+
+            self.model.writer.add_scalar('test/total_acc', total_acc)
         # end of [function] __execute
 
         __execute(self.unknown_data, 'TEST [unknonw]')  # unknown test
-        __execute(self.known_data, 'TEST [ known ]')  # knwon test
+
+        if self.known_data is not None:
+            __execute(self.known_data, 'TEST [ known ]')  # knwon test
     # end of [function] test
 # end of [class] TestMedel
 
 
+@dataclass(init=False)
 class TrainModel():
     def __init__(
             self,
@@ -343,24 +385,26 @@ class TrainModel():
         self.log = model.logs.log  # log
         self.rate = model.logs.rate  # rate
 
+        if gv is None:
+            gv = _gv.GlobalVariables()
+
         # cycle
         self.test_cycle = gv.test_cycle
         self.pth_save_cycle = gv.pth_save_cycle
 
-        if gv is None:
-            gv = _gv.GlobalVariables()
-
         # is save
         if gv.pth_save_cycle != 0:
             # path of model following save cycle
-            self.pth_epoch_path = Path(
-                gv.pth_path, 'epoch_pth', gv.filename_base)
+            self.pth_epoch_path = Path(gv.pth_path, 'epoch_pth', gv.filename_base)
             self.pth_epoch_path.mkdir(parents=True, exist_ok=True)
 
     # end [function] __init__
 
     def train(self):
         self.log.writeline('# Start training.', False)
+        is_availabled = torch.cuda.is_available()
+        self.log.writeline(f'# GPU -> available: {is_availabled}, used: {self.model.use_gpu}')
+
         device = self.model.device
 
         # switch to train
@@ -379,7 +423,7 @@ class TrainModel():
             pbar = tqdm(enumerate(self.train_data), total=len(self.train_data),
                         ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
 
-            for batch_idx, (datas, labels, name) in pbar:
+            for batch_idx, (datas, labels, names) in pbar:
                 datas = datas.to(device)  # data (to gpu / cpu)
                 labels = labels.to(device)  # label (to gpu / cpu)
 
@@ -416,8 +460,11 @@ class TrainModel():
                 # look adjustment
                 if batch_size > 10:
                     # out => [x x x x x x x x ...]
-                    label_ans_str = np.array2string(label_ans[:8])[:-1] + ' ...]'
-                    predicted_str = np.array2string(predicted[:8])[:-1] + ' ...]'
+                    # label_ans_str = np.array2string(label_ans[:8])[:-1] + ' ...]'
+                    # predicted_str = np.array2string(predicted[:8])[:-1] + ' ...]'
+                    label_ans_str = np.array2string(label_ans)
+                    predicted_str = np.array2string(predicted)
+
                 else:
                     # out => [x x x x x x x x x x]
                     label_ans_str = np.array2string(label_ans)
@@ -428,36 +475,40 @@ class TrainModel():
                     ordered_dict=OrderedDict(loss=f'{loss:<8}', acc=f'{acc:<8}'))
 
                 # log
-                ss = f'ans: {label_ans_str} / result: {predicted_str}'
-                ss += f' / loss: {loss:<8} / acc: {acc:<8}'.rstrip()
-                self.log.writeline(ss, False)
+                # ss = f'ans: {label_ans_str} / result: {predicted_str}'
+                # ss += f' / loss: {loss:<8} / acc: {acc:<8}'.rstrip()
+
+                ss = f'loss: {loss:<8} / acc: {acc:<8}'.rstrip()
+                ss += f' / ans: {label_ans_str} / result: {predicted_str}'
+                self.log.writeline(ss, debug_ok=False)
 
                 # break
                 # end of this batch
 
             # calclate total loss / accuracy
-            total_loss = total_loss / len(self.train_data.dataset)
-            total_acc = total_acc / len(self.train_data.dataset)
+            size = len(self.train_data.dataset)
+            total_loss = total_loss / size
+            total_acc = total_acc / size
 
             # log
-            self.log.writeline('\n---------------', False)
-            print('  ', end='')
-            self.log.writeline(f'Total loss: {total_loss}')
-            print('  ', end='')
-            self.log.writeline(f'Total acc: {total_acc}')
-            print()
-            self.log.writeline('---------------\n', False)
+            self.log.writeline('\n---------------', debug_ok=False)
+            self.log.writeline(f'Total loss: {total_loss}', debug_ok=False)
+            self.log.writeline(f'Total acc: {total_acc}', debug_ok=False)
+            self.log.writeline('---------------\n', debug_ok=False)
 
-            # torch.cuda.empty_cache()  # clear memory
+            # for tqdm
+            print(f'  Total loss: {total_loss}')
+            print(f'  Total acc: {total_acc}')
+            print()
+
+            self.model.writer.add_scalar('data/total_acc', total_acc, ep)
+            self.model.writer.add_scalar('data/total_loss', total_loss, ep)
 
             # exec test
             if self.test_cycle != 0:
                 # cycle / not last epoch -> exec
                 if (ep + 1) % self.test_cycle == 0 and (ep + 1) != self.epoch:
-                    self.test_model.test()  # testing
-
-            # tensorboard
-            self.model.writer.add_scalar('data/total_loss', total_loss, ep + 1)
+                    self.test_model.test(epoch=ep)  # testing
 
             # save pth
             if self.pth_save_cycle != 0:
@@ -478,7 +529,7 @@ class TrainModel():
             # end of this epoch
 
         # export as json
-        self.model.writer.export_scalars_to_json('./all_scalars.json')
+        self.model.writer.export_scalars_to_json('all_scalars.json')
         self.model.writer.close()
 
         # end of all epoch
@@ -486,14 +537,54 @@ class TrainModel():
 # end of [class] TrainModel
 
 
-class ValidModel():
-    def __init__(self, model: Model):
-        self.model = model
+@dataclass(init=False)
+class ValidModel(Model):
+    # def __init__(self, model: Model):
+    #     self.model = model
+    def __init__(
+            self,
+            load_pth_path: str,
+            use_gpu: bool = False,
+            transform=None):
+
+        super().__init__(use_gpu=True, load_pth_path=load_pth_path)
+
+        if transform is None:
+            # transform
+            transform = transforms.Compose([
+                transforms.Resize(self.image_size),
+                transforms.ToTensor()])
+
+        self.transform = transform
     # end of [function] __init__
 
-    def valid(self, image):
-        # self.model.net(image) ...
+    def valid(self, image_path: str):
+        self.net.eval()  # switch to eval
 
-        pass
+        # not exist -> -1
+        if not Path(image_path).exists():
+            return -1
+
+        # get image to tensor
+        #   [unsqueeze] referene -> <https://pytorch.org/docs/stable/torch.html#torch.unsqueeze>
+        img = self.__get_image_as_tensor(image_path)
+        img = torch.unsqueeze(img, 0)  # OR img.unsqueeze_(0)
+        img = img.to(self.device)
+
+        x = self.net(img)
+        pred = torch.max(x.data, 1)[1].cpu().numpy()
+
+        label = pred[0]
+        return label
     # end of [function] valid
+
+    def __get_image_as_tensor(self, image_path: str) -> torch.Tensor:
+        img = Image.open(image_path)
+        img = img.convert('RGB')
+
+        if self.transform is not None:
+            img = self.transform(img)
+
+        return img
+    # end of [function] __process_image
 # end of [class] ValidModel

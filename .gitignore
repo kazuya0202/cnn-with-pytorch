@@ -3,6 +3,7 @@ recognition_datasets/**/*
 runs/
 all_scalars.json
 
+mnist-data
 
 ### Python
 

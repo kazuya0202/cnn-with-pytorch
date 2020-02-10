@@ -14,20 +14,20 @@ class GlobalVariables:
         # self.image_size: tuple = (60, 60)  # 縦横が違う場合
         self.image_size: int = 60  # 縦横が同じ場合は省略可
 
-        self.epoch = 2  # エポック
+        self.epoch = 1  # エポック
         self.batch_size = 100  # バッチ(何枚ずつ行うか)
         self.extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']  # 拡張子
 
         self.is_shuffle_per_epoch = True  # エポック毎にデータセットをシャッフルするかどうか
 
         # [cycle]: 0 -> 何もしない / 10 -> 10 epoch / N -> N epoch ...
-        self.pth_save_cycle = 2  # 学習モデル(pth) の保存サイクル('{self.pth_path}/epoch_pth/' に保存)
+        self.pth_save_cycle = 1  # 学習モデル(pth) の保存サイクル('{self.pth_path}/epoch_pth/' に保存)
         self.test_cycle = 1  # 学習モデルの test サイクル
 
         # 使用する画像(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
         # self.image_path = r'./recognition_datasets/Images/'
-        # self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
-        self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+        self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
+        # self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
 
         # 間違えた画像の保存先
         self.false_path = r'./recognition_datasets/False/'
@@ -61,8 +61,8 @@ class GlobalVariables:
         self.use_gpu = True
 
         """ want to do (unimplemented) """
-        import torch.optim as optim
-        self.optimizer = optim.Adam
+        # import torch.optim as optim
+        # self.optimizer = optim.Adam
         # self.optim = optim.SGD
 
         # ↓多分これは変わらないからなくてもいい？

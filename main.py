@@ -2,14 +2,15 @@
 from pathlib import Path
 
 import numpy as np
-import torch
+# import torch
+import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
+import global_variables as _gv
 # my packages
 import torch_utils as tu
 import utils as ul
-import global_variables as _gv
 
 
 class Main:
@@ -56,42 +57,57 @@ class Main:
             transforms.Resize(image_size),
             transforms.ToTensor()])
 
+        # train, test(unknown), test(known)
         dataset = tu.CreateDataset(
             path=gv.image_path,
             extensions=gv.extensions,
             test_size=gv.test_size)
 
-        train_data, unknown_data, known_data = self.__create_custom_dataset(
+        train_data, unknown_data, known_data = self.__create_custom_dataloader(
             dataset=dataset,
             batch_size=gv.batch_size,
             transform=transform,
             is_shuffle=gv.is_shuffle_per_epoch)
 
-        progress.complete()
+        # train_data, unknown_data = self.__create_mnist_dataloader(
+        #     # dataset=dataset,
+        #     batch_size=gv.batch_size,
+        #     transform=transform,
+        #     is_shuffle=gv.is_shuffle_per_epoch)
+        # known_data = None
 
-        # classes
-        for k, _cls in dataset.classes.items():
-            logs.log.writeline(f'{k}: {_cls}')
-        print()
+        progress.complete()
 
         # ===== create make required direcotry =====
         progress = ul.ProgressLog('Making required directory')
 
         # arguments of required path
-        params = [
-            gv.false_path,
-            gv.log_path,
-            gv.pth_path]
+        params = [gv.false_path,
+                  gv.log_path,
+                  gv.pth_path]
 
         ul.make_directories(*params)
         progress.complete()
 
         # ===== network =====
         progress = ul.ProgressLog('Building CNN network')  # debug log
-
-        model = tu.Model(dataset, gv.use_gpu, image_size, logs)
+        # create network
+        # model = tu.Model(
+        #     use_gpu=gv.use_gpu,
+        #     image_size=image_size,
+        #     logs=logs)
+        model = tu.Model(
+            classes=dataset.classes,
+            use_gpu=gv.use_gpu,
+            image_size=image_size,
+            logs=logs)
 
         progress.complete()
+
+        print('Classify classes:')
+        for label, _cls in model.classes.items():
+            print(f'  {label}: {_cls}')
+        print()
 
         # ===== dataset model =====
         test_model = tu.TestModel(model, unknown_data, known_data)
@@ -110,7 +126,7 @@ class Main:
         # ===== save model =====
         # pth path
         pt_params = [gv.pth_path, gv.filename_base]
-        p = ul.create_file_path(*pt_params, ext='pth')
+        p = ul.create_file_path(*pt_params, end='_final', ext='pth')
 
         progress = ul.ProgressLog(f'Saving model to \'{p}\'')
         # train_model.model.save_model(p)  # save
@@ -118,7 +134,7 @@ class Main:
         progress.complete()
     # end of [function] execute
 
-    def __create_custom_dataset(
+    def __create_custom_dataloader(
             self,
             dataset: tu.CreateDataset,
             batch_size: int,
@@ -131,7 +147,9 @@ class Main:
         known_dataset = tu.CustomDataset(dataset, 'known', transform)
 
         # batch size for testing
-        test_batch = int(np.ceil(batch_size / 10.0))
+        test_batch = int(np.ceil(batch_size / 10))
+        if test_batch < 1:
+            test_batch = 1
 
         # train dataloader / test dataloader, shuffle
         train_data = DataLoader(train_dataset, batch_size, is_shuffle)
@@ -140,6 +158,22 @@ class Main:
 
         return (train_data, unknown_data, known_data)
     # end of [function] __create_custom_dataset
+
+    def __create_mnist_dataloader(
+            self,
+            batch_size: int,
+            transform: transforms,
+            is_shuffle: bool):
+
+        train_dataset = torchvision.datasets.MNIST(
+            root='./mnist-data', train=True, download=True, transform=transform)
+        test_dataset = torchvision.datasets.MNIST(
+            root='/mnist-data', train=False, download=True, transform=transform)
+
+        train_data = DataLoader(train_dataset, batch_size=batch_size, shuffle=is_shuffle)
+        test_data = DataLoader(test_dataset, batch_size=batch_size, shuffle=is_shuffle)
+
+        return train_data, test_data
 
     def print_parameter_config(self):
         return
