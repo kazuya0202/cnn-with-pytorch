@@ -1,6 +1,13 @@
+import itertools
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Union
+
+import matplotlib.pyplot as plt
+import numpy as np
+import tensorboardX as tbx
+import torch
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 
 @dataclass(init=False)
@@ -143,8 +150,7 @@ def make_directories(*args):
             continue
 
         p = Path(p)
-        if not p.exists():
-            p.mkdir(parents=True)
+        p.mkdir(parents=True, exist_ok=True)
 # end of [function] make_directories
 
 
@@ -153,6 +159,7 @@ def load_classes(path='config/classes.txt'):
     classes = {}
 
     if not path.exists():
+        # raise FileNotFoundError
         return classes
 
     lines = path.read_text().split('\n')
@@ -197,3 +204,108 @@ class RunningObject():
     def flush(self):
         obj = self.__next_obj()
         print(f'\r{self.head} {obj}', end='', flush=True)
+
+
+# ----- pytorch -----
+
+
+def add_confusion_matrix_to_tensorboard(
+        writer: tbx.SummaryWriter,
+        correct_labels: Union[torch.Tensor, np.ndarray],
+        predicted_labels: Union[torch.Tensor, np.ndarray],
+        classes: List[str],
+        current_epoch: int):
+
+    cm = calc_confusion_matrix(correct_labels, predicted_labels, len(classes))
+    fig = plot_confusion_matrix(cm, classes)
+    add_to_tensorboard(writer, fig, current_epoch)
+
+
+def add_to_tensorboard(
+        writer: tbx.SummaryWriter,
+        fig: plt.figure,
+        step: int):
+
+    fig.canvas.draw()
+    img = fig.canvas.renderer._renderer
+    img_ar = np.array(img).transpose(2, 0, 1)
+
+    writer.add_image('confusion matrix', img_ar)
+    plt.close()
+
+
+def plot_confusion_matrix(
+        cm: Union[torch.Tensor, np.ndarray],
+        classes: List[str],
+        normalize: bool = False,
+        title: str = 'Confusion matrix',
+        cmap: plt.cm = plt.cm.Greens):
+
+    # torch.Tensor to np.ndarray
+    _cm: np.ndarray = cm if not isinstance(cm, torch.Tensor) \
+        else cm.cpu().numpy()
+
+    if normalize:
+        _cm = _cm.astype('float') / _cm.sum(axis=1)[:, np.newaxis]
+        # print("Normalized confusion matrix")
+    else:
+        # print('Confusion matrix, without normalization')
+        pass
+
+    # change font size
+    plt.rcParams["font.size"] = 18
+
+    fig, axes = plt.subplots(figsize=(10, 10))
+
+    # ticklabels
+    tick_marks = np.arange(len(classes))
+
+    plt.setp(axes, xticks=tick_marks, xticklabels=classes)
+    plt.setp(axes, yticks=tick_marks, yticklabels=classes)
+    # rotate xticklabels
+    plt.setp(axes.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
+
+    # title
+    plt.suptitle('Confusion Matrix')
+
+    # label
+    axes.set_ylabel('True label')
+    axes.set_xlabel('Predicted label')
+
+    # grid
+    # axes.grid(which='minor', color='b', linestyle='-', linewidth=3)
+
+    img = plt.imshow(cm, interpolation='nearest', cmap=cmap)
+
+    # adjust color bar
+    divider = make_axes_locatable(axes)
+    cax = divider.append_axes('right', size='5%', pad=0.1)
+    fig.colorbar(img, cax=cax)
+
+    thresh = cm.max() / 2.
+    fmt = '.2f' if normalize else 'd'
+
+    # plot text
+    for i, j in itertools.product(range(len(classes)), range(len(classes))):
+        clr = 'white' if cm[i, j] > thresh else 'black'
+        axes.text(j, i, format(cm[i, j], fmt), ha='center', va='center', color=clr)
+
+    # plt.show()
+    plt.tight_layout()
+    fig = plt.gcf()
+    return fig
+
+
+def calc_confusion_matrix(
+        correct_labels: Union[torch.Tensor, np.ndarray],
+        predicted_labels: Union[torch.Tensor, np.ndarray],
+        class_num: int):
+
+    cm = torch.zeros(class_num, class_num, dtype=torch.int64)
+    stacked = torch.stack((correct_labels, predicted_labels), dim=1)
+
+    for p in stacked:
+        tl, pl = p.tolist()
+        cm[tl, pl] += 1
+
+    return cm
