@@ -119,7 +119,8 @@ class Main:
             test_model=test_model,
             test_cycle=gv.test_cycle,
             pth_save_cycle=gv.pth_save_cycle,
-            pth_save_path=pth_save_path)
+            pth_save_path=pth_save_path,
+            false_path=gv.false_path)
 
         # exec
         train_model.train()  # train

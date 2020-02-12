@@ -19,7 +19,7 @@ class GlobalVariables:
         self.image_size: int = 60  # 縦横が同じ場合は省略可
 
         self.epoch = 3  # エポック
-        self.mini_batch = 64  # バッチ(何枚ずつ行うか)
+        self.mini_batch = 50  # バッチ(何枚ずつ行うか)
         self.extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']  # 拡張子
 
         self.is_shuffle_per_epoch = True  # エポック毎にデータセットをシャッフルするかどうか
@@ -32,8 +32,8 @@ class GlobalVariables:
         self.is_save_final_pth = False
 
         # 使用する画像(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
-        self.image_path = r'./recognition_datasets/Images/'
-        # self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
+        # self.image_path = r'./recognition_datasets/Images/'
+        self.image_path = r'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
         # self.image_path = r'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
         # ====================================== #
         #  Images/                <- ここを指定
@@ -51,6 +51,9 @@ class GlobalVariables:
 
         # 学習モデルの保存先
         self.pth_save_path = r'./recognition_datasets/'
+
+        # データの保存先
+        # self.workspace_path = r'./recognition_datasets/'
 
         """ ログ """
         self.is_save_debug_log = True  # コンソールの出力をファイルに書き出すかどうか

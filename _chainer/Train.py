@@ -46,8 +46,9 @@ def Training():
             for ngo in y.data[0:10]:
                 ydata.append(int(np.argmax(chainer.cuda.to_cpu(ngo))))
             # End_For
-            print("t:{} y:{}".format(t[0:10], ydata) + " loss.data:{:*<8} acc.data:{:*<8}".format(
-                round(float(loss.data), 6), round(float(acc.data), 6)))
+            # print("t:{} y:{}".format(t[0:10], ydata) + " loss.data:{:*<8} acc.data:{:*<8}".format(
+                # round(float(loss.data), 6), round(float(acc.data), 6)))
+            print(f'\r{len(x)}')
             if gv.G.IsDebugLog:
                 gv.G.LogFile.write("t:{} y:{} loss.data{:*<8} acc.data{:*<8}\r\n".format(
                     t[0:10], ydata, round(float(loss.data), 6), round(float(acc.data), 6)))

@@ -22,13 +22,13 @@ import datetime
 class G:
     # -----------------------------各環境・実験に合わせて書き換えてください-----------------------------
     # データセット取得関係(数値は各クラス毎の枚数)
-    DataSetSize = 30  # テストデータと学習データの合計
+    DataSetSize = 200  # テストデータと学習データの合計
     TestSize = 5  # テストデータ枚数
     TrainSize = DataSetSize - TestSize  # 学習データ枚数
-    MinibatchSize = 5
+    MinibatchSize = 100
     Height = 60  # 画像サイズ(高さ，このサイズにリサイズされる)
     Width = 60  # 画像サイズ(横幅，このサイズにリサイズされる)
-    EpochNum = 2  # エポック数
+    EpochNum = 5  # エポック数
 
     # --- config for kannon
     # DataSetSize = 4464  # テストデータと学習データの合計
@@ -44,7 +44,8 @@ class G:
 
     # パス関係
     # #使用する画像(各クラスごとにフォルダにまとめて，そのフォルダをまとめたパスを指定)
-    ImagePath = r".\rec\Images"
+    ImagePath = r"C:\ichiya\repos\github.com\kazuya0202\cnn-with-pytorch\recognition_datasets\Images"
+    # ImagePath = r".\rec\Images"
     FalsePath = r".\rec\False"
     SavePicklePath = r".\rec"
 

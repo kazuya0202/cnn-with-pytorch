@@ -13,26 +13,23 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torchvision.utils import save_image
 from tqdm import tqdm
 
 # my packages
 import cnn
-# import global_variables as _gv
 import utils as ul
+
+# import global_variables as _gv
 
 
 @dataclass
 class Data:
-    r""" Nesessary datas of create dataset.
+    r""" Nesessary datas of create dataset. """
 
-    Args:
-        path (str): image path.
-        label (int): label of class.
-        name (str): class name.
-    """
-    path: str  # path
-    label: int  # label
-    name: str  # name
+    path: str  # image path
+    label: int  # label of class
+    name: str  # class name
 
     def items(self):
         r""" Returns items of Data class.
@@ -40,6 +37,7 @@ class Data:
         Returns:
             tuple: Items of class.
         """
+
         return self.path, self.label, self.name
     # end of [function] items
 # end of [class] Data
@@ -196,7 +194,8 @@ class CustomDataset(Dataset):
 
         if self.transform is not None:
             img = self.transform(img)
-        return img, label, name
+
+        return img, label, name, path
     # end of [function] __getitem__
 
     def __len__(self):
@@ -439,7 +438,7 @@ class TestModel(Model):
             pbar.set_description('TEST[{}]'.format(target.center(7)))
 
             # for data, label, name in self.test_data:
-            for datas, labels, names in pbar:
+            for datas, labels, names, pathes in pbar:
                 datas = datas.to(self.device)
                 labels = labels.to(self.device)
 
@@ -451,7 +450,7 @@ class TestModel(Model):
                 label_ans = labels.cpu().numpy()  # correct answer
 
                 # release memory
-                del out, labels, datas, names
+                del out, labels, datas, names, pathes
 
                 # label of correct answer
                 # count of matched label, and it add to total_acc
@@ -463,7 +462,7 @@ class TestModel(Model):
                     acc_size[k] += (x == y).sum()  # match -> correct
                     all_size[k] += x.tolist().count(1)  # all size of each class
 
-                break
+                # break
             # end of all test
             self.log.writeline()
 
@@ -514,7 +513,9 @@ class TrainModel(Model):
             test_model: TestModel,
             pth_save_cycle: int = 0,
             test_cycle: int = 1,
-            pth_save_path: Optional[str] = None) -> None:
+            # workspace_path: Optional[str] = None) -> None:
+            pth_save_path: Optional[str] = None,
+            false_path: Optional[str] = None) -> None:
         """
         Args:
             model (Model): model parameters.
@@ -539,9 +540,19 @@ class TrainModel(Model):
 
         # assign '' if path is None
         self.pth_save_path = pth_save_path if pth_save_path is not None else ''
+        # self.pth_save_path = workspace_path if workspace_path is not None else ''
+
+        self.false_path = false_path if false_path is not None else ''
 
         self.all_label = torch.tensor([], dtype=torch.long)
         self.all_pred = torch.tensor([], dtype=torch.long)
+
+        self.false_pathes = [Path(self.false_path, f'epoch{ep}') for ep in range(self.max_epoch)]
+
+        # mkdir
+        for path in self.false_pathes:
+            path.mkdir(parents=True, exist_ok=True)
+
     # end [function] __init__
 
     def train(self):
@@ -564,7 +575,7 @@ class TrainModel(Model):
             pbar = tqdm(enumerate(self.train_data), total=len(self.train_data),
                         ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
 
-            for batch_idx, (datas, labels, names) in pbar:
+            for batch_idx, (datas, labels, names, pathes) in pbar:
                 datas = datas.to(self.device)  # data (to gpu / cpu)
                 labels = labels.to(self.device)  # label (to gpu / cpu)
 
@@ -590,10 +601,26 @@ class TrainModel(Model):
                 label_ans = labels.cpu().numpy()  # correct answer
 
                 # release memory
-                del out, labels, datas, names
+                # del out, labels, datas, names, pathes
+
+                pred_bool = (label_ans == predicted)
+                false_step = [idx for idx, x in enumerate(pred_bool) if not x]
+
+                for idx in false_step:
+                    fp = self.false_pathes[ep]
+                    fp = Path(fp, f'batch_{batch_idx}')
+
+                    fp.mkdir(parents=True, exist_ok=True)
+
+                    img_path = Path(fp, Path(pathes[idx]).name)
+
+                    img = datas[idx]
+                    save_image(img, str(img_path))
+                    # print(img_path)
 
                 # count of matched label
-                cnt = (label_ans == predicted).sum()
+                # cnt = (label_ans == predicted).sum()
+                cnt = pred_bool.sum()
 
                 # calc total
                 total_acc += cnt
@@ -768,7 +795,6 @@ class ValidModel(Model):
         name = self.classes[label]
 
         return PredictedResult(label, name)
-        # return Predicted(label, str(name), rate)
     # end of [function] valid
 
     def __get_image_as_tensor(self, image_path: str) -> torch.Tensor:
