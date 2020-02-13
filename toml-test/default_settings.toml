@@ -1,0 +1,37 @@
+[path]
+image_path = ''
+false_path = ''
+save_pth_path = ''
+log_path = ''
+# export_config_path = ''
+
+[dataset]
+limit_dataset_size = 0
+test_size = 0.1
+# test_size = 400
+
+input_size = 60
+# input_size = [60, 60]
+
+extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
+
+[network]
+epoch = 3
+mini_batch = 50
+
+is_shuffle_per_epoch = true
+
+
+test_cycle = 1
+pth_save_cycle = 0
+
+is_save_final_pth = false
+
+[log]
+is_save_debug_log = false
+is_save_rate_log = false
+is_print_network_config = false
+
+[gradcam]
+is_grad_cam = false
+grad_cam_path = ''
