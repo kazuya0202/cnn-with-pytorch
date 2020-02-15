@@ -52,9 +52,6 @@ class GlobalVariables:
         # 学習モデルの保存先
         self.pth_save_path = r'./recognition_datasets/'
 
-        # データの保存先
-        # self.workspace_path = r'./recognition_datasets/'
-
         """ ログ """
         self.is_save_debug_log = True  # コンソールの出力をファイルに書き出すかどうか
         self.is_save_rate_log = True  # エポック毎の認識率を保存するかどうか
@@ -74,9 +71,9 @@ class GlobalVariables:
 
         # ===== COMPLEX SETTINGS =====
         from datetime import datetime
+        self.filename_base = datetime.now().strftime('%Y%b%d_%Hh%Mm%Ss')
         # self.filename_base = str(datetime.datetime.now().strftime(
         #     "ymd%Y%m%d_hms%H%M%S")).replace(" ", "_")
-        self.filename_base = datetime.now().strftime('%Y%b%d_%Hh%Mm%Ss')
 
         self.use_gpu = True
 

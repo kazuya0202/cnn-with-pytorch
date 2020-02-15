@@ -1,0 +1,71 @@
+[util_path]
+# false - save mistaking images
+false_path = './Recognition/False/'
+
+# path - save trained model
+pth_save_path = './Recognition/'
+
+# config - save config of dataset
+config_path = './config/'
+
+[dataset]
+# image - target dataset
+dataset_path = './Recognition/Images/'
+
+# max dataset size
+limit_dataset_size = +nan
+
+# testing size
+test_size = 0.1  # proportional
+# test_size = 400  # number
+
+# supported extensions
+extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
+
+[network]
+# input size to network
+input_size = [60, 60]
+
+# epoch times
+epoch = 10
+
+# image size in one batch
+mini_batch = 100
+
+# testing cycle
+test_cycle = 1
+
+# saving pth cycle
+pth_save_cycle = 0
+
+# using gpu
+use_gpu = true
+
+# shuffle images per epoch
+is_shuffle_per_epoch = true
+
+# save final pth
+is_save_final_pth = true
+
+[log]
+# log - save logging
+log_path = './Recognition/Logs/'
+
+# debug log
+is_save_debug_log = true
+
+# rate log
+is_save_rate_log = true
+
+# network definition
+is_print_network_difinition = true
+
+[gradcam]
+# save path of grad cam images
+grad_cam_path = './Recognition/grad_cam_results/'
+
+# use grad cam
+is_grad_cam = true
+
+# visualize layer
+grad_cam_layer = 'conv5'

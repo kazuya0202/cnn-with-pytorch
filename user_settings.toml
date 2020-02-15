@@ -1,0 +1,86 @@
+# === USER SETTINGS ===
+
+# default_settings.toml の設定を上書きする
+# 変更しないものはコメントアウト
+# ※ 変数名は変更しない
+
+[util_path]
+# 間違えた画像の保存先
+false_path = './recognition_datasets/False/'
+
+# 学習モデルの保存先
+pth_save_path = './recognition_datasets/'
+
+# 使用画像、クラスの出力先
+# config_path = './config/'
+
+[dataset]
+# データセットのパス(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
+# dataset_path = './recognition_datasets/Images/'
+dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+    # ====================================== #
+    #  Images/                <- ここを指定
+    #    ├─ class_A/
+    #    │      ├─ 001.jpg
+    #    │      └─ ...
+    #    ├─ class_B/
+    #    │      ├─ 001.jpg
+    #    │      └─ ...
+    #    └─ ...
+    # ====================================== #
+
+# データセットの最大枚数(0 は上限なし)
+# limit_dataset_size = 0
+
+# 各データセットのテスト比率(枚数) ↓どちらか一方を使う
+test_size = 0.1  # 比率: (0.0 ~ 1.0) type[float]
+# test_size = 400  # 枚数: (1 ~ N)  type[int]
+
+# 対象の拡張子
+extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
+
+[network]
+# 入力サイズ
+input_size = [60, 60]
+
+# エポック数
+epoch = 3
+
+# 1バッチの画像枚数(何枚ずつ行うか)
+mini_batch = 100
+
+# [cycle]: 0 -> 何もしない / 10 -> 10 epoch / N -> N epoch ...
+pth_save_cycle = 0  # 学習モデル(pth) の保存サイクル('{pth_path}/epoch_pth/' に保存)
+test_cycle = 1  # 学習モデルの test サイクル
+
+# GPUを使用するかどうか(使用できない場合、自動的に false になる)
+use_gpu = true
+
+# エポック毎にデータセットをシャッフルするかどうか
+is_shuffle_per_epoch = true
+
+# 最終モデルを保存するか
+is_save_final_pth = true
+
+[log]
+# ログ(学習状況)の出力先
+log_path = './recognition_datasets/Logs/'
+
+# コンソールの出力をファイルに書き出すかどうか
+is_save_debug_log = true
+
+# エポック毎の認識率を保存するかどうか
+is_save_rate_log = true
+
+# 構築したネットワーク、クラスなどを出力するかどうか
+is_print_network_difinition = true
+
+[gradcam]
+# Grad CAM 画像の保存先
+grad_cam_path = './recognition_datasets/grad_cam_results/'
+
+# GradCAM を行うかどうか
+is_grad_cam = true
+
+# 可視化するレイヤー
+grad_cam_layer = 'conv5'

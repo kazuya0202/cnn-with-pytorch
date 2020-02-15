@@ -11,7 +11,7 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 # my packages
-import global_variables as _gv
+import toml_settings as _tms
 import torch_utils as tu
 import utils as ul
 
@@ -19,54 +19,52 @@ import utils as ul
 @dataclass
 class Main:
     def execute(self):
-        gv = _gv.GlobalVariables()
+        tms = _tms.factory()
 
         """ DEBUG NOW """
-        gv.is_save_debug_log = False
-        gv.is_save_rate_log = False
+        tms.is_save_debug_log = False
+        tms.is_save_rate_log = False
         """ --------- """
 
-        # if not exist, exit script
-        if not Path(gv.image_path).exists():
-            err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), gv.image_path)
+        # # if not exist, exit script
+        if not Path(tms.dataset_path).exists():
+            err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), tms.dataset_path)
             raise FileNotFoundError(err)
 
         # ===== log / rate file =====
         log = ul.LogFile(None)
         rate = ul.LogFile(None)
 
-        if gv.is_save_debug_log:
-            p = ul.create_file_path(gv.log_path, gv.filename_base)
+        # if gv.is_save_debug_log:
+        if tms.is_save_debug_log:
+            p = ul.create_file_path(tms.log_path, tms.filename_base)
             log = ul.LogFile(p, default_debug_ok=True)
 
-        if gv.is_save_rate_log:
-            p = ul.create_file_path(gv.log_path, gv.filename_base, ext='csv')
+        # if gv.is_save_rate_log:
+        if tms.is_save_rate_log:
+            p = ul.create_file_path(tms.log_path, tms.filename_base, ext='csv')
             rate = ul.LogFile(p, default_debug_ok=True)
 
         # ===== create datasets =====
-        progress = ul.ProgressLog(f'Create dataset from \'{gv.image_path}\'')
-
-        # get input image size as tuple
-        image_size = gv.image_size
-        if not isinstance(image_size, tuple):
-            image_size = (image_size, image_size)
+        progress = ul.ProgressLog(f'Create dataset from \'{tms.dataset_path}\'')
 
         # transform
         transform = transforms.Compose([
-            transforms.Resize(image_size),
+            transforms.Resize(tms.input_size),
             transforms.ToTensor()])
 
         # train, test(unknown), test(known)
         dataset = tu.CreateDataset(
-            path=gv.image_path,
-            extensions=gv.extensions,
-            test_size=gv.test_size)
+            path=tms.dataset_path,
+            extensions=tms.extensions,
+            test_size=tms.test_size,
+            config_path=tms.config_path)
 
         train_data, unknown_data, known_data = self.__create_custom_dataloader(
             dataset=dataset,
-            batch_size=gv.mini_batch,
+            batch_size=tms.mini_batch,
             transform=transform,
-            is_shuffle=gv.is_shuffle_per_epoch)
+            is_shuffle=tms.is_shuffle_per_epoch)
 
         # train_data, unknown_data = self.__create_mnist_dataloader(
         #     # dataset=dataset,
@@ -80,17 +78,12 @@ class Main:
         # ===== create make required direcotry =====
         progress = ul.ProgressLog('Making required directory')
 
-        # save pth in any epoch
-        pth_save_path = None if gv.pth_save_cycle == 0 \
-            else Path(gv.pth_save_path, 'epoch_pth', gv.filename_base).as_posix()
-
-        # arguments of required path
-        params = [gv.false_path,
-                  gv.log_path,
-                  gv.pth_save_path,
-                  pth_save_path]
-
-        ul.make_directories(*params)
+        # make required path
+        ul.make_directories(
+            tms.false_path,
+            tms.log_path,
+            tms.pth_save_path
+        )
         progress.complete()
 
         # ===== network =====
@@ -98,41 +91,37 @@ class Main:
         # create network
         model = tu.Model(
             classes=dataset.classes,
-            use_gpu=gv.use_gpu,
-            image_size=image_size,
+            use_gpu=tms.use_gpu,
             log=log,
-            rate=rate)
+            rate=rate,
+            toml_settings=tms)
 
         progress.complete()
 
         # logging parameter config
-        if gv.is_print_params:
-            self.__print_parameter_config(gv, model, dataset, log)
+        if tms.is_print_network_difinition:
+            self.__print_parameter_config(model, dataset, log)
 
         # ===== dataset model =====
         test_model = tu.TestModel(model, unknown_data, known_data)
 
         train_model = tu.TrainModel(
             model=model,
-            epoch=gv.epoch,
+            epoch=tms.epoch,
             train_data=train_data,
-            test_model=test_model,
-            test_cycle=gv.test_cycle,
-            pth_save_cycle=gv.pth_save_cycle,
-            pth_save_path=pth_save_path,
-            false_path=gv.false_path)
+            test_model=test_model)
 
         # exec
         train_model.train()  # train
-        test_model.test(epoch=gv.epoch - 1)  # final test
+        test_model.test(epoch=tms.epoch - 1)  # final test
 
         # ===== save model =====
         # pth path
-        pt_params = [gv.pth_save_path, gv.filename_base]
+        pt_params = [tms.pth_save_path, tms.filename_base]
         save_path = ul.create_file_path(*pt_params, end='_final', ext='pth')
 
         progress = ul.ProgressLog(f'Saving model to \'{save_path}\'')
-        if gv.is_save_final_pth:
+        if tms.is_save_final_pth:
             train_model.save_model(save_path, _save=True)  # save
         progress.complete()
 
@@ -151,15 +140,10 @@ class Main:
         unknown_dataset = tu.CustomDataset(dataset, 'unknown', transform)
         known_dataset = tu.CustomDataset(dataset, 'known', transform)
 
-        # batch size for testing
-        test_batch = int(np.ceil(batch_size / 10))
-        if test_batch < 1:
-            test_batch = 1
-
         # train dataloader / test dataloader, shuffle
         train_data = DataLoader(train_dataset, batch_size=batch_size, shuffle=is_shuffle)
-        unknown_data = DataLoader(unknown_dataset, batch_size=test_batch, shuffle=is_shuffle)
-        known_data = DataLoader(known_dataset, batch_size=test_batch, shuffle=is_shuffle)
+        unknown_data = DataLoader(unknown_dataset, batch_size=1, shuffle=is_shuffle)
+        known_data = DataLoader(known_dataset, batch_size=1, shuffle=is_shuffle)
 
         return train_data, unknown_data, known_data
     # end of [function] __create_custom_dataset
@@ -182,25 +166,26 @@ class Main:
 
     def __print_parameter_config(
             self,
-            gv: _gv.GlobalVariables,
             model: tu.Model,
             dataset: tu.CreateDataset,
             log: ul.LogFile) -> None:
 
+        tms = model.tms
+
         global_conf = {
-            'runtime': gv.filename_base,
-            'image path': gv.image_path,
-            'supported extensions': gv.extensions,
-            'is save debug log': gv.is_save_debug_log,
-            'is save rate log': gv.is_save_rate_log,
-            'pth save cycle': gv.pth_save_cycle,
-            'test cycle': gv.test_cycle,
-            'is save final pth': gv.is_save_final_pth,
+            'runtime': tms.filename_base,
+            'image path': tms.dataset_path,
+            'supported extensions': tms.extensions,
+            'is save debug log': tms.is_save_debug_log,
+            'is save rate log': tms.is_save_rate_log,
+            'pth save cycle': tms.pth_save_cycle,
+            'test cycle': tms.test_cycle,
+            'is save final pth': tms.is_save_final_pth,
             # is gradcam...
         }
 
         dataset_conf = {
-            'limit dataset size': gv.limit_dataset_size,
+            'limit dataset size': tms.limit_dataset_size,
             'train dataset size': len(dataset.all_list['train']),
             'unknown dataset size': len(dataset.all_list['unknown']),
             'known dataset size': len(dataset.all_list['known']),
@@ -208,11 +193,11 @@ class Main:
 
         is_available = torch.cuda.is_available()
         model_conf = {
-            'net': model.net.__str__(),
-            'optimizer': model.optimizer.__str__(),
-            'criterion': model.criterion.__str__(),
-            'input size': model.image_size,
-            'epoch': gv.epoch,
+            'net': str(model.net),
+            'optimizer': str(model.optimizer),
+            'criterion': str(model.criterion),
+            'input size': model.input_size,
+            'epoch': tms.epoch,
             'GPU': f'available: {is_available}, used: {model.use_gpu}'
         }
 
@@ -221,19 +206,20 @@ class Main:
 
             # adjust to max length of key
             max_len = max([len(x) for x in _dict.keys()])
-            _format = f'%-{max_len}s : %s'
+            # _format = f'%-{max_len}s : %s'
 
             for k, v in _dict.items():
                 # format for structure of network
                 if isinstance(v, str) and v.find('\n') > -1:
                     v = v.replace('\n', '\n' + ' ' * (max_len + 3)).rstrip()
 
-                log.writeline(_format % (k, v))
+                log.writeline(f'{k.center(max_len)} : {v}')
+                # log.writeline(_format % (k, v))
             log.writeline('\n')
 
         log.writeline('--- Classify Classes ---')
         for label, _cls in model.classes.items():
-            log.writeline(f'  {label}: {_cls}')
+            log.writeline(f'{str(label).center(3)}: {_cls}')
         log.writeline('\n')
 
         __inner_execute(global_conf, '--- Global Config ---')

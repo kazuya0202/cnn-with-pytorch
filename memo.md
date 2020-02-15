@@ -1,5 +1,10 @@
 ## WANT TO DO
 
++ RuntimeWarning: invalid value encountered in less
+  xa[xa < 0] = -1
+  + https://teratail.com/questions/190718
+
+
 + torchaudio + nnAudio -> spectrogram
   + or torchaudioのみ
 + tensorboard
@@ -13,8 +18,6 @@
   + print('-', end='\r') yield
   + print('\\', end='\r') yield
   + print('-', end='\r') yield
-+ 学習時にbatch_sizeが一定値より大きかったら、for回してN個ずつモデルに入力して、step()させる?
-
 ## TODO
 
 + batch, image_size

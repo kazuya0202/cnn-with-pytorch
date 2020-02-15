@@ -1,3 +1,4 @@
+from collections import OrderedDict
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -7,7 +8,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
 
         hei_input = input_size[0] // 4
-        cnn2 = input_size[1] // 4
+        wid_input = input_size[1] // 4
 
         self.conv1 = nn.Conv2d(
             in_channels=3,
@@ -41,36 +42,66 @@ class Net(nn.Module):
             padding=1,
             stride=1,
             kernel_size=3)
+
         # self.fc6 = nn.Linear(256 * 16 * 16, 2048)
 
         # self.fc6 = nn.Linear(256 * in_height * in_width, 1024)
         # self.fc7 = nn.Linear(1024, 512)
         # self.fc8 = nn.Linear(512, 3)
-        self.fc6 = nn.Linear(256 * hei_input * cnn2, 2048)
+        self.fc6 = nn.Linear(256 * hei_input * wid_input, 2048)
         self.fc7 = nn.Linear(2048, 512)
         self.fc8 = nn.Linear(512, 3)
+
+        self.features = nn.ModuleDict(OrderedDict({
+            'conv1': self.conv1,
+            'relu1': nn.ReLU(),
+            'bn1': self.bn1,
+            'conv2': self.conv2,
+            'relu2': nn.ReLU(),
+            'bn2': self.bn2,
+            'pool1': nn.MaxPool2d(2),
+            'conv3': self.conv3,
+            'relu3': nn.ReLU(),
+            'conv4': self.conv4,
+            'relu4': nn.ReLU(),
+            'conv5': self.conv5,
+            'relu5': nn.ReLU(),
+            'pool2': nn.MaxPool2d(2)
+        }))
+
+        self.classifier = nn.Sequential(
+            self.fc6,
+            nn.ReLU(),
+            self.fc7,
+            nn.ReLU(),
+            self.fc8
+        )
     # end of [function] __init__
 
     # from pytorch_memlab import profile
     # @profile
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = self.bn1(x)
-        x = F.relu(self.conv2(x))
-        x = self.bn2(x)
-        x = F.max_pool2d(x, 2)
-        x = F.relu(self.conv3(x))
-        x = F.relu(self.conv4(x))
-        x = F.relu(self.conv5(x))
-        x = F.max_pool2d(x, 2)
+
+        # x = F.relu(self.conv1(x))
+        # x = self.bn1(x)
+        # x = F.relu(self.conv2(x))
+        # x = self.bn2(x)
+        # x = F.max_pool2d(x, 2)
+        # x = F.relu(self.conv3(x))
+        # x = F.relu(self.conv4(x))
+        # x = F.relu(self.conv5(x))
+        # x = F.max_pool2d(x, 2)
 
         # self.fc6 の input 計算用
         # print(x.size())
 
+        x = self.features(x)
         x = x.view(-1, num_flat_features(x))
-        x = F.relu(self.fc6(x))
-        x = F.relu(self.fc7(x))
-        x = self.fc8(x)
+        x = self.classifier(x)
+
+        # x = F.relu(self.fc6(x))
+        # x = F.relu(self.fc7(x))
+        # x = self.fc8(x)
 
         # don't run `softmax()` because of softmax process in CrossEntropyLoss
         # x = F.softmax(x)

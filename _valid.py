@@ -7,7 +7,7 @@ def main():
     gv = _gv.GlobalVariables()
     pth_path = './recognition_datasets/0_2020Feb10_21h48m40s_final.pth'
 
-    vm = tu.ValidModel(pth_path, use_gpu=gv.use_gpu)
+    vm = tu.ValidModel(pth_path)
     # pred_label = vm.valid('./recognition_datasets/Images/crossing/crossing-samp1_9_9.jpg')
     # print(pred_label)
 
