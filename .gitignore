@@ -1,7 +1,7 @@
 recognition_datasets/**/*
 *.txt
 runs/
-all_scalars.json
+config/
 
 mnist-data
 

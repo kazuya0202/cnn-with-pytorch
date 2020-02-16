@@ -470,31 +470,32 @@ class TestModel(Model):
                 # correct
                 if predicted == label_ans:
                     acc_size[label_ans][0] += 1
+                    continue
 
                 # mistake
-                else:
-                    if not self.tms.is_grad_cam:
-                        continue
+                # grad-cam
+                if not self.tms.is_grad_cam:
+                    continue
 
-                    # prevent memory error
-                    self.net.to('cpu')
+                # prevent memory error
+                self.net.to('cpu')
 
-                    # grad-cam
-                    ret = self.egc.main(self.net, path)
+                # grad-cam
+                ret = self.egc.main(self.net, path)
 
-                    exp_path_base = Path(self.tms.grad_cam_path, 'false', target, f'epoch_{epoch + 1}')
-                    exp_path_base.mkdir(parents=True, exist_ok=True)
+                exp_path_base = Path(self.tms.grad_cam_path, 'false', target, f'epoch_{epoch + 1}')
+                exp_path_base.mkdir(parents=True, exist_ok=True)
 
-                    for key, _list in ret.items():
-                        for i, img_data in enumerate(_list):
-                            _path = exp_path_base.joinpath(
-                                f'{idx}_{self.classes[i]}_{key}_pred[{predicted}]_correct[{label_ans}].png')
+                for key, _list in ret.items():
+                    for i, img_data in enumerate(_list):
+                        _path = exp_path_base.joinpath(
+                            f'{idx}_{self.classes[i]}_{key}_pred[{predicted}]_correct[{label_ans}].png')
 
-                            # plt.imshow(img_data)
-                            # plt.pause(0.1)
+                        # plt.imshow(img_data)
+                        # plt.pause(0.1)
 
-                            # save
-                            cv2.imwrite(str(_path), img_data)
+                        # save
+                        cv2.imwrite(str(_path), img_data)
 
                     # restore device
                     self.net.to(self.device)
@@ -832,7 +833,7 @@ class TrainModel(Model):
             # end of this epoch
 
         # export as json
-        self.writer.export_scalars_to_json(f'{self.tms.config_path}/all_scalars.json')
+        # self.writer.export_scalars_to_json(f'{self.tms.config_path}/all_scalars.json')
         self.writer.close()
 
         # end of all epoch
