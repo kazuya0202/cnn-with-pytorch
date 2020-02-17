@@ -158,6 +158,7 @@ class ExecuteGradCam:
 
         pbar = tqdm(range(cls_num), total=cls_num, ncols=100,
                     bar_format='{l_bar}{bar:30}{r_bar}', leave=False)
+        pbar.set_description('Grad-CAM')
 
         for i in pbar:
             if self.is_vanilla:

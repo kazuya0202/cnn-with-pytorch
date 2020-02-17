@@ -221,7 +221,7 @@ class Model:
 
     def __init__(
             self,
-            toml_settings: _tms.TomlSettings,
+            toml_settings: Optional[_tms.TomlSettings] = None,
             classes: Optional[dict] = None,
             use_gpu: bool = True,
             log: Optional[ul.LogFile] = None,
@@ -256,6 +256,8 @@ class Model:
         self.use_gpu = torch.cuda.is_available() and use_gpu
         self.device = torch.device('cuda' if self.use_gpu else 'cpu')
 
+        if toml_settings is None:
+            toml_settings = _tms.factory()
         self.tms = toml_settings
 
         # for tensorboard
@@ -290,28 +292,11 @@ class Model:
         Args:
             model (Model): model parameters.
         """
+
+        # self.XX = YY
         for k in model.__dict__.keys():
             expression = f'self.{k} = model.{k}'
             exec(expression)
-
-        # network params
-        # self.net = model.net
-        # self.criterion = model.criterion
-        # self.optimizer = model.optimizer
-
-        # # configs
-        # self.classes = model.classes
-        # self.device = model.device
-        # self.log = model.log  # log
-        # self.rate = model.rate  # rate
-        # self.use_gpu = model.use_gpu
-        # self.input_size = model.input_size
-        # self.load_pth_path = model.load_pth_path
-        # self.tms = model.tms
-
-        # # for tensorboard
-        # self.writer = model.writer
-    # end of [function] inherit_params
 
     def __build_model(self):
         r""" Building model.
@@ -446,62 +431,54 @@ class TestModel(Model):
             pbar.set_description('TEST[{}]'.format(target.center(7)))
 
             # for data, label, name in self.test_data:
-            for idx, items in enumerate(pbar):
-                img_data, label, name, path = items
+            for batch_idx, items in enumerate(pbar):
+                # img, label, name, path
+                img, label, _, path = items
 
-                img_data = img_data.to(self.device)
+                img = img.to(self.device)
                 label = label.to(self.device)
 
-                # data into model
-                out = self.net(img_data).to(self.device)
+                out = self.net(img).to(self.device)  # data into model
+                predicted = torch.max(out.data, 1)[1].cpu().numpy()[0]  # predicted label
+                label_ans = label.cpu().numpy()[0]  # correct label
 
-                # label
-                predicted = torch.max(out.data, 1)[1].cpu().numpy()[0]  # predict
-                label_ans = label.cpu().numpy()[0]  # correct answer
+                # pred_cls = self.classes[predicted]  # predicted class name
+                # ans_cls = self.classes[label_ans]  # correct class name
 
-                # release memory
-                # del out, label, img, name, path
+                acc_size[label_ans][1] += 1  # count of test size
 
-                # pred_cls = self.classes[predicted]
-                # ans_cls = self.classes[label_ans]
-
-                acc_size[label_ans][1] += 1
-
-                # correct
+                # correct -> continue
                 if predicted == label_ans:
-                    acc_size[label_ans][0] += 1
+                    acc_size[label_ans][0] += 1  # count of acc size
                     continue
 
                 # mistake
-                # grad-cam
+                # do not Grad-CAM -> continue
                 if not self.tms.is_grad_cam:
                     continue
 
-                # prevent memory error
-                self.net.to('cpu')
-
-                # grad-cam
+                # Grad-CAM
                 ret = self.egc.main(self.net, path)
 
-                exp_path_base = Path(self.tms.grad_cam_path, 'false', target, f'epoch_{epoch + 1}')
+                # base path
+                exp_path_base = Path(self.tms.grad_cam_path, self.tms.filename_base,
+                                     'false', target, f'epoch_{epoch + 1}')
                 exp_path_base.mkdir(parents=True, exist_ok=True)
 
                 for key, _list in ret.items():
-                    for i, img_data in enumerate(_list):
-                        _path = exp_path_base.joinpath(
-                            f'{idx}_{self.classes[i]}_{key}_pred[{predicted}]_correct[{label_ans}].png')
+                    for i, img in enumerate(_list):
+                        # save path
+                        _name = f'{batch_idx}_{self.classes[i]}_{key}'
+                        _name += f'_pred[{predicted}]_correct[{label_ans}].png'
+                        _path = exp_path_base.joinpath(_name)
 
+                        cv2.imwrite(str(_path), img)  # save
+
+                        # for debug
                         # plt.imshow(img_data)
                         # plt.pause(0.1)
+                # end of this batch
 
-                        # save
-                        cv2.imwrite(str(_path), img_data)
-
-                    # restore device
-                    self.net.to(self.device)
-
-                # label of correct answer
-                # count of matched label, and it add to total_acc
             self.log.writeline()
 
             # calc each accuracy
@@ -511,9 +488,9 @@ class TestModel(Model):
                 acc = acc_num / all_num
                 total_acc += acc
 
-                ss = f'%-12s -> acc: {acc:<.4f} ({acc_num} / {all_num} images.)' % f'[{_cls}]'
-                self.log.writeline(ss, debug_ok=False)
-                print(f'  {ss}')
+                _name = f'%-12s -> acc: {acc:<.4f} ({acc_num} / {all_num} images.)' % f'[{_cls}]'
+                self.log.writeline(_name, debug_ok=False)
+                print(f'  {_name}')
 
                 # end of calculate accuracy of each class and total
 
@@ -521,123 +498,20 @@ class TestModel(Model):
 
             # total accuracy
             total_acc /= len(self.classes)
-            print('  ', end='')
-            self.log.writeline(f'Total acc: {total_acc}\n')
+            self.log.writeline(f'Total acc: {total_acc}\n', debug_ok=False)
+
+            # for tqdm
+            print(f'  Total acc: {total_acc}\n')
         # end of [function] __execute
 
-        __inner_execute(self.unknown_data, 'unknown')  # unknown test
+        # unknown test
+        __inner_execute(self.unknown_data, 'unknown')
 
+        # knwon test
         if self.known_data is not None:
-            __inner_execute(self.known_data, 'known')  # knwon test
-
-    # def test(self, epoch: Optional[int] = None):
-    #     """ Testing model
-    #     batchsize > 1 (difficult gradcam)
-
-    #     Args:
-    #         epoch (Optional[int], optional): current epoch. Defaults to None.
-    #     """
-
-    #     # switch to test
-    #     self.net.eval()
-
-    #     self.log.writeline('# Start testing.\n', False)
-
-    #     acc_result = {
-    #         'known': {},
-    #         'unknown': {},
-    #     }
-
-    #     def __inner_execute(data_loader: DataLoader, target: str = 'unknown'):
-    #         """ Execute unknown or known dataset.
-
-    #         Args:
-    #             data_loader (DataLoader): dataloader
-    #             tqdm_desc (str, optional): description for tqdm. Defaults to ''.
-    #         """
-
-    #         total_acc = 0  # total accuracy
-
-    #         _dict = dict([(_cls, [0, 0]) for _cls in self.classes.keys()])
-
-    #         # acc of each class
-    #         acc_size = _dict.copy()  # {'cls_name': [acc_num, all_num]}
-    #         # all_size = _dict.copy()  # test size of each class
-
-    #         # test
-    #         pbar = tqdm(data_loader, total=len(data_loader),
-    #                     ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
-    #         pbar.set_description('TEST[{}]'.format(target.center(7)))
-
-    #         # for data, label, name in self.test_data:
-    #         for items in pbar:
-    #             imgs, labels, names, paths = items
-
-    #             imgs = imgs.to(self.device)
-    #             labels = labels.to(self.device)
-
-    #             # data into model
-    #             out = self.net(imgs).to(self.device)
-
-    #             # label
-    #             predicted = torch.max(out.data, 1)[1].cpu().numpy()  # predict
-    #             label_ans = labels.cpu().numpy()  # correct answer
-
-    #             # release memory
-    #             del out, labels, imgs, names, paths
-
-    #             # label of correct answer
-    #             # count of matched label, and it add to total_acc
-    #             for k in self.classes.keys():
-    #                 # match -> 1, else -> -1 / -2
-    #                 x = np.where(label_ans == k, 1, -1)
-    #                 y = np.where(predicted == k, 1, -2)
-
-    #                 acc_size[k][0] += (x == y).sum()  # match -> correct
-    #                 acc_size[k][1] += x.tolist().count(1)  # all size of each class
-    #                 # acc_size[k] += (x == y).sum()  # match -> correct
-    #                 # all_size[k] += x.tolist().count(1)  # all size of each class
-
-    #             # break
-    #             # end of this test
-    #         # end of all test
-    #         self.log.writeline()
-
-    #         # calc each accuracy
-    #         for k, _cls in self.classes.items():
-    #             # acc_num = acc_size[k]
-    #             # all_num = all_size[k]
-    #             acc_num, all_num = acc_size[k]
-
-    #             acc = acc_num / all_num
-    #             total_acc += acc
-    #             acc_result[target][_cls] = acc
-
-    #             ss = f'%-12s -> acc: {acc:<.4f} ({acc_num} / {all_num} images.)' % f'[{_cls}]'
-    #             self.log.writeline(ss, debug_ok=False)
-    #             print(f'  {ss}')
-
-    #             # end of calculate accuracy of each class and total
-
-    #         self.log.writeline()
-
-    #         # total accuracy
-    #         total_acc /= len(self.classes)
-    #         print('  ', end='')
-    #         self.log.writeline(f'Total acc: {total_acc}\n')
-    #     # end of [function] __execute
-
-    #     __inner_execute(self.unknown_data, 'unknown')  # unknown test
-
-    #     if self.known_data is not None:
-    #         __inner_execute(self.known_data, 'known')  # knwon test
-
-    #     # tensorboard (do not plot when last epoch.)
-    #     # for target, cls_dict in acc_result.items():
-    #     #     self.writer.add_scalars(f'test/acc_{target}', cls_dict, epoch)
-    # # end of [function] test
-
-# end of [class] TestMedel
+            __inner_execute(self.known_data, 'known')
+    # end of [function] test
+# end of [class] TestModel
 
 
 @dataclass(init=False)
@@ -671,12 +545,13 @@ class TrainModel(Model):
         self.all_label = torch.tensor([], dtype=torch.long)
         self.all_pred = torch.tensor([], dtype=torch.long)
 
-        self.false_paths = [Path(self.tms.false_path, f'epoch{ep}') for ep in range(self.max_epoch)]
+        # for making false path
+        _base = Path(self.tms.false_path, self.tms.filename_base)
+        self.false_paths = [_base.joinpath(f'epoch{ep}') for ep in range(self.max_epoch)]
 
         # mkdir
         for path in self.false_paths:
             path.mkdir(parents=True, exist_ok=True)
-
     # end [function] __init__
 
     def train(self):
@@ -697,49 +572,48 @@ class TrainModel(Model):
 
             subdivision = self.tms.subdivision
 
-            # batch in one epoch
+            # batch in one epoch (outer tqdm)
             outer_pbar = tqdm(self.train_data, total=len(self.train_data),
                               ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
+            outer_pbar.set_description('TRAIN')
 
             # batch process
             for batch_idx, items in enumerate(outer_pbar):
                 imgs, labels, names, paths = items
                 self.optimizer.zero_grad()  # init gradient
 
-                split = np.linspace(0, len(imgs), subdivision + 1, dtype=np.int)
-                result_batch = torch.tensor([]).to(self.device)
-                loss_batch = 0
+                batch_size = len(imgs)  # batch size
+                batch_result = torch.tensor([])  # all result of one batch
+                batch_loss = 0  # total loss of one batch
 
-                inner_pbar = tqdm(range(subdivision), total=subdivision, ncols=100,
-                                  bar_format='{l_bar}{bar:30}{r_bar}', leave=False)
+                # generate arithmetic progression of mini batch
+                sep = np.linspace(0, batch_size, subdivision + 1, dtype=np.int)
 
-                for div in inner_pbar:
-                    n, m = split[div], split[div + 1]
+                # mini batch process
+                for sv in range(subdivision):
+                    n, m = sep[sv], sep[sv + 1]  # cutout data (N ~ M)
+                    mb_imgs = imgs[n:m].to(self.device)
+                    mb_labels = labels[n:m].to(self.device)
 
-                    div_imgs = imgs[n:m]
-                    div_labels = labels[n:m]
-
-                    div_imgs = div_imgs.to(self.device)  # data (to gpu / cpu)
-                    div_labels = div_labels.to(self.device)  # label (to gpu / cpu)
-
-                    pred = self.net(div_imgs).to(self.device)
-                    result_batch = torch.cat((result_batch, pred), dim=0)  # data into model
-
-                    loss = self.criterion(pred, div_labels)  # calculate loss
+                    mb_result = self.net(mb_imgs)  # data into model
+                    loss = self.criterion(mb_result, mb_labels)  # calculate loss
                     loss.backward()  # calculate gradient
 
-                    loss_batch += float(loss.item())
+                    # concatenate result
+                    batch_result = torch.cat((batch_result, mb_result.cpu()), dim=0)
+
+                    batch_loss += float(loss.item())  # add loss value
+                # end of this mini batch
 
                 self.optimizer.step()  # update parameters
-
-                loss_batch = loss_batch / subdivision
+                loss_val = batch_loss / subdivision  # calc avg loss value
 
                 # tensorboard log
-                self.writer.add_scalar('data/loss', loss_batch, plot_point)
+                self.writer.add_scalar('data/loss', loss_val, plot_point)
                 plot_point += 1
 
                 # label
-                predicted = torch.max(result_batch.data, 1)[1].cpu()  # predict
+                predicted = torch.max(batch_result.data, 1)[1].cpu()  # predict
                 labels = labels.cpu()
                 self.all_pred = torch.cat((self.all_pred, predicted), dim=0)
                 self.all_label = torch.cat((self.all_label, labels), dim=0)
@@ -747,41 +621,37 @@ class TrainModel(Model):
                 predicted = predicted.numpy()  # predict
                 label_ans = labels.numpy()  # correct answer
 
-                pred_bool = (label_ans == predicted)
                 # cls_bool = [label_ans[i] for i, x in enumerate(pred_bool) if not x]
+
+                pred_bool = (label_ans == predicted)  # matching
+                # index of mistake prediction
                 false_step = [idx for idx, x in enumerate(pred_bool) if not x]
 
+                # save image of mistake prediction
                 for idx in false_step:
                     fp = self.false_paths[ep]
                     name = Path(paths[idx]).name
 
-                    img_path = Path(fp, f'batch_{batch_idx}', name)
+                    img_path = Path(fp, f'batch_{batch_idx}-{name}')
                     img_path.parent.mkdir(parents=True, exist_ok=True)
 
-                    # save
-                    # save_image(datas[idx], str(img_path))
-
-                # release memory
-                del result_batch, labels, imgs, names, paths
+                    save_image(imgs[idx], str(img_path))  # save
 
                 # count of matched label
-                cnt = pred_bool.sum()
-
-                batch_size = len(label_ans)
+                acc_cnt = pred_bool.sum()
 
                 # calc total
-                total_acc += cnt
-                total_loss += loss_batch * batch_size
+                total_acc += acc_cnt
+                total_loss += loss_val * batch_size
 
-                acc = cnt / batch_size
+                acc = acc_cnt / batch_size  # accuracy
 
-                outer_pbar.set_description(f'TRAIN')
+                # for tqdm message
                 outer_pbar.set_postfix(
-                    ordered_dict=OrderedDict(loss=f'{loss_batch:<.6f}', acc=f'{acc:<.6f}'))
+                    ordered_dict=OrderedDict(loss=f'{loss_val:<.6f}', acc=f'{acc:<.6f}'))
 
-                ss = f'loss: {loss_batch:<.6f} / acc: {acc:<.6f}'.rstrip()
-                # ss += f'\nans   : {label_ans_str}'
-                # ss += f'\nresult: {predicted_str}'
+                # for log
+                ss = f'loss: {loss_val:<.6f} / acc: {acc:<.6f}'
                 ss += f'\n  -> ans   : {label_ans}'
                 ss += f'\n  -> result: {predicted}'
 
@@ -789,88 +659,6 @@ class TrainModel(Model):
 
                 # break
                 # end of this batch
-
-                # imgs = imgs.to(self.device)  # data (to gpu / cpu)
-                # labels = labels.to(self.device)  # label (to gpu / cpu)
-
-                # self.optimizer.zero_grad()  # init gradient
-                # out = self.net(imgs).to(self.device)  # data into model
-                # loss = self.criterion(out, labels)  # calculate loss
-                # loss.backward()  # calculate gradient
-                # self.optimizer.step()  # update parameters
-
-                # # tensorboard log
-                # loss_val = float(loss.item())
-                # self.writer.add_scalar('data/loss', loss_val, plot_point)
-                # plot_point += 1
-
-                # # label
-                # predicted = torch.max(out.data, 1)[1].cpu()  # predict
-                # labels = labels.cpu()
-                # self.all_pred = torch.cat((self.all_pred, predicted), dim=0)
-                # self.all_label = torch.cat((self.all_label, labels), dim=0)
-
-                # predicted = predicted.numpy()  # predict
-                # label_ans = labels.numpy()  # correct answer
-
-                # pred_bool = (label_ans == predicted)
-                # # cls_bool = [label_ans[i] for i, x in enumerate(pred_bool) if not x]
-                # false_step = [idx for idx, x in enumerate(pred_bool) if not x]
-
-                # for idx in false_step:
-                #     fp = self.false_paths[ep]
-                #     name = Path(paths[idx]).name
-
-                #     img_path = Path(fp, f'batch_{batch_idx}', name)
-                #     img_path.parent.mkdir(parents=True, exist_ok=True)
-
-                #     # save
-                #     # save_image(datas[idx], str(img_path))
-
-                # # release memory
-                # del out, labels, imgs, names, paths
-
-                # # count of matched label
-                # cnt = pred_bool.sum()
-
-                # batch_size = len(label_ans)
-
-                # # calc total
-                # total_acc += cnt
-                # total_loss += loss_val * batch_size
-
-                # acc = cnt / batch_size
-
-                # # look adjustment
-                # # label_ans_str = ''
-                # # predicted_str = ''
-
-                # # if batch_size > 10:
-                # #     # out => [x x x x x x x x ...]
-                # #     label_ans_str = np.array2string(label_ans[:8])[:-1] + ' ...]'
-                # #     predicted_str = np.array2string(predicted[:8])[:-1] + ' ...]'
-                # # else:
-                # #     # out => [x x x x x x x x x x]
-                # #     label_ans_str = np.array2string(label_ans)
-                # #     predicted_str = np.array2string(predicted)
-
-                # # ss = f'ans: {label_ans_str} / result: {predicted_str}'
-                # # ss += f' / loss: {loss:<8} / acc: {acc:<8}'.rstrip()
-
-                # inner_pbar.set_description(f'TRAIN')
-                # inner_pbar.set_postfix(
-                #     ordered_dict=OrderedDict(loss=f'{loss_val:<.6f}', acc=f'{acc:<.6f}'))
-
-                # ss = f'loss: {loss_val:<.6f} / acc: {acc:<.6f}'.rstrip()
-                # # ss += f'\nans   : {label_ans_str}'
-                # # ss += f'\nresult: {predicted_str}'
-                # ss += f'\n  -> ans   : {label_ans}'
-                # ss += f'\n  -> result: {predicted}'
-
-                # self.log.writeline(ss, debug_ok=False)
-
-                # # break
-                # # end of this batch
 
             # add confusion matrix to tensorboard
             add_confusion_matrix_to_tensorboard(
@@ -881,7 +669,7 @@ class TrainModel(Model):
             total_loss = total_loss / size
             total_acc = total_acc / size
 
-            # log
+            # for log
             self.log.writeline('\n---------------', debug_ok=False)
             self.log.writeline(f'Total loss: {total_loss}', debug_ok=False)
             self.log.writeline(f'Total acc: {total_acc}', debug_ok=False)
@@ -891,16 +679,15 @@ class TrainModel(Model):
             print(f'  Total loss: {total_loss}')
             print(f'  Total acc: {total_acc}\n')
 
+            # for tensorboard
             self.writer.add_scalar('data/total_acc', total_acc, ep)
             self.writer.add_scalar('data/total_loss', total_loss, ep)
 
             # exec test cycle
-            # if self.__is_execute_cycle(self.test_cycle, ep):
             if self.test_schedule[ep]:
                 self.test_model.test(epoch=ep)
 
             # save pth cycle
-            # if self.__is_execute_cycle(self.pth_save_cycle, ep):
             if self.pth_save_schedule[ep]:
                 save_path = ul.create_file_path(
                     self.tms.pth_save_path, '', head=f'epoch{ep + 1}', ext='pth')
@@ -959,14 +746,11 @@ class ValidModel(Model):
         Args:
             load_pth_path (str): pth path to load.
             use_gpu (bool, optional): using gpu or cpu. Defaults to False.
+            toml_settings (_tms.TomlSettings, optional): global settings. Defaults to None.
             transform (transforms, optional): tensor transform. Defaults to None.
         """
 
         # super constructor
-        # super().__init__(valid=True use_gpu=use_gpu, load_pth_path=load_pth_path)
-        if toml_settings is None:
-            toml_settings = _tms.factory()
-
         super().__init__(toml_settings=toml_settings, use_gpu=use_gpu)
 
         if transform is None:

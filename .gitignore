@@ -1,5 +1,4 @@
 recognition_datasets/**/*
-*.txt
 runs/
 config/
 

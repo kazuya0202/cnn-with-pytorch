@@ -172,15 +172,16 @@ class Main:
         tms = model.tms
 
         global_conf = {
-            'runtime': tms.filename_base,
+            'run time': tms.filename_base,
             'image path': tms.dataset_path,
             'supported extensions': tms.extensions,
-            'is save debug log': tms.is_save_debug_log,
-            'is save rate log': tms.is_save_rate_log,
+            'saving debug log is': tms.is_save_debug_log,
+            'saving rate log is': tms.is_save_rate_log,
             'pth save cycle': tms.pth_save_cycle,
             'test cycle': tms.test_cycle,
-            'is save final pth': tms.is_save_final_pth,
-            # is gradcam...
+            'saving final pth is': tms.is_save_final_pth,
+            'Grad-CAM is': tms.is_grad_cam,
+            'Grad-CAM layer': tms.grad_cam_layer
         }
 
         dataset_conf = {
@@ -190,14 +191,15 @@ class Main:
             'known dataset size': len(dataset.all_list['known']),
         }
 
-        is_available = torch.cuda.is_available()
         model_conf = {
             'net': str(model.net),
             'optimizer': str(model.optimizer),
             'criterion': str(model.criterion),
             'input size': model.input_size,
             'epoch': tms.epoch,
-            'GPU': f'available: {is_available}, used: {model.use_gpu}'
+            'subdivision': tms.subdivision,
+            'GPU available': torch.cuda.is_available(),
+            'GPU used': model.use_gpu
         }
 
         def __inner_execute(_dict: Dict[str, Any], head: str = ''):
@@ -213,14 +215,11 @@ class Main:
                     v = v.replace('\n', '\n' + ' ' * (max_len + 3)).rstrip()
 
                 log.writeline(f'{k.center(max_len)} : {v}')
-                # log.writeline(_format % (k, v))
             log.writeline('\n')
 
-        log.writeline('--- Classify Classes ---')
-        for label, _cls in model.classes.items():
-            log.writeline(f'{str(label).center(3)}: {_cls}')
-        log.writeline('\n')
+        classes = {str(k): v for k, v in model.classes.items()}
 
+        __inner_execute(classes, '--- Classify Classes ---')
         __inner_execute(global_conf, '--- Global Config ---')
         __inner_execute(dataset_conf, '--- Dataset Config ---')
         __inner_execute(model_conf, '--- Model Config ---')
