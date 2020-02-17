@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
 
 class Net(nn.Module):
@@ -53,7 +54,7 @@ class Net(nn.Module):
 
     # from pytorch_memlab import profile
     # @profile
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         x = F.relu(self.conv1(x))
         x = self.bn1(x)
         x = F.relu(self.conv2(x))

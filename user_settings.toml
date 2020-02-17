@@ -17,7 +17,8 @@ pth_save_path = './recognition_datasets/'
 [dataset]
 # データセットのパス(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
 # dataset_path = './recognition_datasets/Images/'
-dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+# dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+dataset_path = 'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
     # ====================================== #
     #  Images/                <- ここを指定
     #    ├─ class_A/
@@ -47,7 +48,10 @@ input_size = [60, 60]
 epoch = 3
 
 # 1バッチの画像枚数(何枚ずつ行うか)
-mini_batch = 100
+batch = 128
+
+# バッチの細分化
+subdivision = 8
 
 # [cycle]: 0 -> 何もしない / 10 -> 10 epoch / N -> N epoch ...
 pth_save_cycle = 0  # 学習モデル(pth) の保存サイクル('{pth_path}/epoch_pth/' に保存)

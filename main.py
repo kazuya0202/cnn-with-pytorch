@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict
 
-import numpy as np
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -62,7 +61,7 @@ class Main:
 
         train_data, unknown_data, known_data = self.__create_custom_dataloader(
             dataset=dataset,
-            batch_size=tms.mini_batch,
+            batch_size=tms.batch,
             transform=transform,
             is_shuffle=tms.is_shuffle_per_epoch)
 

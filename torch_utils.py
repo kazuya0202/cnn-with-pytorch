@@ -688,10 +688,6 @@ class TrainModel(Model):
         self.log.writeline('# Start training.', False)
         plot_point = 0  # for tensorboard
 
-        # epoch
-        # outer_pbar = tqdm(range(self.max_epoch),
-        #                   ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
-
         # loop epoch
         for ep in range(self.max_epoch):
             total_loss = 0  # total loss
@@ -699,30 +695,51 @@ class TrainModel(Model):
 
             self.log.writeline(f'----- Epoch: {ep + 1} -----')
 
+            subdivision = self.tms.subdivision
+
             # batch in one epoch
-            inner_pbar = tqdm(self.train_data, total=len(self.train_data),
+            outer_pbar = tqdm(self.train_data, total=len(self.train_data),
                               ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
 
             # batch process
-            for batch_idx, items in enumerate(inner_pbar):
+            for batch_idx, items in enumerate(outer_pbar):
                 imgs, labels, names, paths = items
-
-                imgs = imgs.to(self.device)  # data (to gpu / cpu)
-                labels = labels.to(self.device)  # label (to gpu / cpu)
-
                 self.optimizer.zero_grad()  # init gradient
-                out = self.net(imgs).to(self.device)  # data into model
-                loss = self.criterion(out, labels)  # calculate loss
-                loss.backward()  # calculate gradient
+
+                split = np.linspace(0, len(imgs), subdivision + 1, dtype=np.int)
+                result_batch = torch.tensor([]).to(self.device)
+                loss_batch = 0
+
+                inner_pbar = tqdm(range(subdivision), total=subdivision, ncols=100,
+                                  bar_format='{l_bar}{bar:30}{r_bar}', leave=False)
+
+                for div in inner_pbar:
+                    n, m = split[div], split[div + 1]
+
+                    div_imgs = imgs[n:m]
+                    div_labels = labels[n:m]
+
+                    div_imgs = div_imgs.to(self.device)  # data (to gpu / cpu)
+                    div_labels = div_labels.to(self.device)  # label (to gpu / cpu)
+
+                    pred = self.net(div_imgs).to(self.device)
+                    result_batch = torch.cat((result_batch, pred), dim=0)  # data into model
+
+                    loss = self.criterion(pred, div_labels)  # calculate loss
+                    loss.backward()  # calculate gradient
+
+                    loss_batch += float(loss.item())
+
                 self.optimizer.step()  # update parameters
 
+                loss_batch = loss_batch / subdivision
+
                 # tensorboard log
-                loss_val = float(loss.item())
-                self.writer.add_scalar('data/loss', loss_val, plot_point)
+                self.writer.add_scalar('data/loss', loss_batch, plot_point)
                 plot_point += 1
 
                 # label
-                predicted = torch.max(out.data, 1)[1].cpu()  # predict
+                predicted = torch.max(result_batch.data, 1)[1].cpu()  # predict
                 labels = labels.cpu()
                 self.all_pred = torch.cat((self.all_pred, predicted), dim=0)
                 self.all_label = torch.cat((self.all_label, labels), dim=0)
@@ -745,7 +762,7 @@ class TrainModel(Model):
                     # save_image(datas[idx], str(img_path))
 
                 # release memory
-                del out, labels, imgs, names, paths
+                del result_batch, labels, imgs, names, paths
 
                 # count of matched label
                 cnt = pred_bool.sum()
@@ -754,31 +771,15 @@ class TrainModel(Model):
 
                 # calc total
                 total_acc += cnt
-                total_loss += loss_val * batch_size
+                total_loss += loss_batch * batch_size
 
                 acc = cnt / batch_size
 
-                # look adjustment
-                # label_ans_str = ''
-                # predicted_str = ''
+                outer_pbar.set_description(f'TRAIN')
+                outer_pbar.set_postfix(
+                    ordered_dict=OrderedDict(loss=f'{loss_batch:<.6f}', acc=f'{acc:<.6f}'))
 
-                # if batch_size > 10:
-                #     # out => [x x x x x x x x ...]
-                #     label_ans_str = np.array2string(label_ans[:8])[:-1] + ' ...]'
-                #     predicted_str = np.array2string(predicted[:8])[:-1] + ' ...]'
-                # else:
-                #     # out => [x x x x x x x x x x]
-                #     label_ans_str = np.array2string(label_ans)
-                #     predicted_str = np.array2string(predicted)
-
-                # ss = f'ans: {label_ans_str} / result: {predicted_str}'
-                # ss += f' / loss: {loss:<8} / acc: {acc:<8}'.rstrip()
-
-                inner_pbar.set_description(f'TRAIN')
-                inner_pbar.set_postfix(
-                    ordered_dict=OrderedDict(loss=f'{loss_val:<.6f}', acc=f'{acc:<.6f}'))
-
-                ss = f'loss: {loss_val:<.6f} / acc: {acc:<.6f}'.rstrip()
+                ss = f'loss: {loss_batch:<.6f} / acc: {acc:<.6f}'.rstrip()
                 # ss += f'\nans   : {label_ans_str}'
                 # ss += f'\nresult: {predicted_str}'
                 ss += f'\n  -> ans   : {label_ans}'
@@ -788,6 +789,88 @@ class TrainModel(Model):
 
                 # break
                 # end of this batch
+
+                # imgs = imgs.to(self.device)  # data (to gpu / cpu)
+                # labels = labels.to(self.device)  # label (to gpu / cpu)
+
+                # self.optimizer.zero_grad()  # init gradient
+                # out = self.net(imgs).to(self.device)  # data into model
+                # loss = self.criterion(out, labels)  # calculate loss
+                # loss.backward()  # calculate gradient
+                # self.optimizer.step()  # update parameters
+
+                # # tensorboard log
+                # loss_val = float(loss.item())
+                # self.writer.add_scalar('data/loss', loss_val, plot_point)
+                # plot_point += 1
+
+                # # label
+                # predicted = torch.max(out.data, 1)[1].cpu()  # predict
+                # labels = labels.cpu()
+                # self.all_pred = torch.cat((self.all_pred, predicted), dim=0)
+                # self.all_label = torch.cat((self.all_label, labels), dim=0)
+
+                # predicted = predicted.numpy()  # predict
+                # label_ans = labels.numpy()  # correct answer
+
+                # pred_bool = (label_ans == predicted)
+                # # cls_bool = [label_ans[i] for i, x in enumerate(pred_bool) if not x]
+                # false_step = [idx for idx, x in enumerate(pred_bool) if not x]
+
+                # for idx in false_step:
+                #     fp = self.false_paths[ep]
+                #     name = Path(paths[idx]).name
+
+                #     img_path = Path(fp, f'batch_{batch_idx}', name)
+                #     img_path.parent.mkdir(parents=True, exist_ok=True)
+
+                #     # save
+                #     # save_image(datas[idx], str(img_path))
+
+                # # release memory
+                # del out, labels, imgs, names, paths
+
+                # # count of matched label
+                # cnt = pred_bool.sum()
+
+                # batch_size = len(label_ans)
+
+                # # calc total
+                # total_acc += cnt
+                # total_loss += loss_val * batch_size
+
+                # acc = cnt / batch_size
+
+                # # look adjustment
+                # # label_ans_str = ''
+                # # predicted_str = ''
+
+                # # if batch_size > 10:
+                # #     # out => [x x x x x x x x ...]
+                # #     label_ans_str = np.array2string(label_ans[:8])[:-1] + ' ...]'
+                # #     predicted_str = np.array2string(predicted[:8])[:-1] + ' ...]'
+                # # else:
+                # #     # out => [x x x x x x x x x x]
+                # #     label_ans_str = np.array2string(label_ans)
+                # #     predicted_str = np.array2string(predicted)
+
+                # # ss = f'ans: {label_ans_str} / result: {predicted_str}'
+                # # ss += f' / loss: {loss:<8} / acc: {acc:<8}'.rstrip()
+
+                # inner_pbar.set_description(f'TRAIN')
+                # inner_pbar.set_postfix(
+                #     ordered_dict=OrderedDict(loss=f'{loss_val:<.6f}', acc=f'{acc:<.6f}'))
+
+                # ss = f'loss: {loss_val:<.6f} / acc: {acc:<.6f}'.rstrip()
+                # # ss += f'\nans   : {label_ans_str}'
+                # # ss += f'\nresult: {predicted_str}'
+                # ss += f'\n  -> ans   : {label_ans}'
+                # ss += f'\n  -> result: {predicted}'
+
+                # self.log.writeline(ss, debug_ok=False)
+
+                # # break
+                # # end of this batch
 
             # add confusion matrix to tensorboard
             add_confusion_matrix_to_tensorboard(

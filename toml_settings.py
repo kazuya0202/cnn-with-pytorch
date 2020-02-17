@@ -66,7 +66,8 @@ class TomlSettings:
         # [network]
         self.input_size: Tuple[int, int]
         self.epoch: int
-        self.mini_batch: int
+        self.batch: int
+        self.subdivision: int
         self.use_gpu: bool
         self.test_cycle: int
         self.pth_save_cycle: int

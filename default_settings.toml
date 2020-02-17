@@ -30,7 +30,10 @@ input_size = [60, 60]
 epoch = 10
 
 # image size in one batch
-mini_batch = 100
+batch = 128
+
+# subdivision of batch
+subdivision = 4
 
 # testing cycle
 test_cycle = 1
