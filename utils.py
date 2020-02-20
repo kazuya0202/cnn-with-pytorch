@@ -148,6 +148,13 @@ def load_classes(path='config/classes.txt'):
 # end of [function] load_classes
 
 
+def find_str(_str: str, keyword: str) -> bool:
+    if _str.find(keyword) > -1:
+        return True
+
+    return False
+# end of [function]
+
 @dataclass(init=False)
 class RunningObject():
     """

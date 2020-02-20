@@ -1,5 +1,14 @@
+from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
 import toml
+
+# my packages
+import utils as ul
+
+paths = {
+    'default': './default_settings.toml',
+    'user': './user_settings.toml'
+}
 
 
 def apply_settings(target: dict, src: dict):
@@ -18,6 +27,7 @@ def apply_settings(target: dict, src: dict):
                 continue
 
             target[keys][k] = v
+# end of [function] apply_settings
 
 
 def print_toml(_dict: dict):
@@ -29,24 +39,39 @@ def print_toml(_dict: dict):
         for k, v in vals.items():
             print(f'  {k}: {v}')
         print()
+# end of [function] print_toml
 
 
 def print_dict(_dict: dict):
     for k, v in _dict.items():
         print(f'{k}: {v}')
+# end of [function] print_dict
 
 
-def factory() -> 'TomlSettings':
-    pre_toml = toml.load('./default_settings.toml')
-    usr_toml = toml.load('./user_settings.toml')
+def factory(
+        default_path: Optional[str] = None,
+        user_path: Optional[str] = None) -> 'TomlSettings':
+
+    global paths
+
+    default_path = default_path if default_path is not None \
+        else paths['default']
+    user_path = user_path if user_path is not None \
+        else paths['user']
+
+    pre_toml = toml.load(default_path)
+    usr_toml = toml.load(user_path)
+
     apply_settings(pre_toml, usr_toml)
 
     applied_toml = pre_toml.copy()
 
     tms = TomlSettings(applied_toml)
     return tms
+# end of [function] factory
 
 
+@dataclass(init=False)
 class TomlSettings:
     def __init__(self, _dict: dict):
         # default_settings.toml
@@ -64,7 +89,8 @@ class TomlSettings:
         self.extensions: List[str]
 
         # [network]
-        self.input_size: Tuple[int, int]
+        self.height: int
+        self.width: int
         self.epoch: int
         self.batch: int
         self.subdivision: int
@@ -85,8 +111,9 @@ class TomlSettings:
         self.grad_cam_path: str
         self.grad_cam_layer: str
 
-        from datetime import datetime
-        self.filename_base = datetime.now().strftime('%Y%b%d_%Hh%Mm%Ss')
+        # options
+        self.filename_base: str
+        self.input_size: Tuple[int, int]
 
         # -----
 
@@ -94,7 +121,7 @@ class TomlSettings:
         #   `exec` reference <https://docs.python.org/3/library/functions.html#exec>
 
         # [Examples]
-        #   self.dataset_path = r'./Images/'
+        #   self.dataset_path = r'.\Images'
         #   self.use_gpu = True
         #   self.epoch = 10
 
@@ -102,7 +129,11 @@ class TomlSettings:
             for k, v in vals.items():
                 ss = 'self.{} = {}'
 
-                if k.find('path') > -1 or k.find('\\') > -1:
+                has_backslash = False if not isinstance(v, str) \
+                    else v.find('\\') > -1
+
+                # if k.find('path') > -1 or k.find('\\') > -1:
+                if ul.find_str(k, 'path') or has_backslash:
                     ss = 'self.{} = r"{}"'
 
                 elif isinstance(v, str):
@@ -112,9 +143,14 @@ class TomlSettings:
                 expression = ss.format(k, v)
                 exec(expression)
 
-        # determine input size
-        if isinstance(self.input_size, list):
-            self.input_size = tuple(self.input_size)
-
         if self.limit_dataset_size == 0:
             self.limit_dataset_size = None
+
+        # determine input size
+        self.input_size = (self.height, self.width)
+
+        from datetime import datetime
+        self.filename_base = datetime.now().strftime('%Y%b%d_%Hh%Mm%Ss')
+
+    # end of [function] __init__
+# end of [class] TomlSettings

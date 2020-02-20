@@ -52,7 +52,7 @@ class Main:
             transforms.Resize(tms.input_size),
             transforms.ToTensor()])
 
-        # train, test(unknown), test(known)
+        # train, unknown, known
         dataset = tu.CreateDataset(
             path=tms.dataset_path,
             extensions=tms.extensions,
@@ -75,25 +75,25 @@ class Main:
         progress.complete()
 
         # ===== create make required direcotry =====
-        progress = ul.ProgressLog('Making required directory')
+        # progress = ul.ProgressLog('Making required directory')
 
-        # make required path
-        ul.make_directories(
-            tms.false_path,
-            tms.log_path,
-            tms.pth_save_path
-        )
-        progress.complete()
+        # # make required path
+        # ul.make_directories(
+        #     tms.false_path,
+        #     tms.log_path,
+        #     tms.pth_save_path
+        # )
+        # progress.complete()
 
         # ===== network =====
         progress = ul.ProgressLog('Building CNN network')  # debug log
         # create network
         model = tu.Model(
+            toml_settings=tms,
             classes=dataset.classes,
             use_gpu=tms.use_gpu,
             log=log,
-            rate=rate,
-            toml_settings=tms)
+            rate=rate)
 
         progress.complete()
 
@@ -186,16 +186,16 @@ class Main:
 
         dataset_conf = {
             'limit dataset size': tms.limit_dataset_size,
-            'train dataset size': len(dataset.all_list['train']),
-            'unknown dataset size': len(dataset.all_list['unknown']),
-            'known dataset size': len(dataset.all_list['known']),
+            'train dataset size': dataset.train_size,
+            'unknown dataset size': dataset.unknown_size,
+            'known dataset size': dataset.known_size,
         }
 
         model_conf = {
             'net': str(model.net),
             'optimizer': str(model.optimizer),
             'criterion': str(model.criterion),
-            'input size': model.input_size,
+            'input size': f'(h: {tms.height}, w: {tms.width})',
             'epoch': tms.epoch,
             'subdivision': tms.subdivision,
             'GPU available': torch.cuda.is_available(),

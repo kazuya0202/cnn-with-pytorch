@@ -1,7 +1,6 @@
 # === USER SETTINGS ===
 
 # default_settings.toml の設定を上書きする
-# 変更しないものはコメントアウト
 # ※ 変数名は変更しない
 
 [util_path]
@@ -12,7 +11,7 @@ false_path = './recognition_datasets/False/'
 pth_save_path = './recognition_datasets/'
 
 # 使用画像、クラスの出力先
-# config_path = './config/'
+config_path = './config/'
 
 [dataset]
 # データセットのパス(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
@@ -31,7 +30,7 @@ dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\
     # ====================================== #
 
 # データセットの最大枚数(0 は上限なし)
-# limit_dataset_size = 0
+limit_dataset_size = 0
 
 # 各データセットのテスト比率(枚数) ↓どちらか一方を使う
 test_size = 0.1  # 比率: (0.0 ~ 1.0) type[float]
@@ -42,7 +41,8 @@ extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
 
 [network]
 # 入力サイズ
-input_size = [60, 60]
+height = 60
+width = 60
 
 # エポック数
 epoch = 3

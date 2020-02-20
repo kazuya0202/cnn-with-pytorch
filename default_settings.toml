@@ -16,7 +16,7 @@ dataset_path = './Recognition/Images/'
 limit_dataset_size = 0
 
 # testing size
-test_size = 0.1  # proportional
+test_size = 0.1  # rate
 # test_size = 400  # number
 
 # supported extensions
@@ -24,7 +24,8 @@ extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
 
 [network]
 # input size to network
-input_size = [60, 60]
+height = 60
+width = 60
 
 # epoch times
 epoch = 10

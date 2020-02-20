@@ -39,7 +39,7 @@
 
 [^1]: `user-settings.toml`の記述が正しくない場合、以下のようなエラーが出る。
 
-<div><summary>クリックして展開</summary><details>
+<summary>クリックして展開</summary><details>
 
 ```sh
 $ python main.py
@@ -69,6 +69,6 @@ Traceback (most recent call last):
 toml.decoder.TomlDecodeError: invalid literal for int() with base 0: 'tru' (line 83 column 1 char 1736)
 ```
 
-</details></div>
+</details>
 
 [^2]: GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_settings.toml`の`subdivision`の値を増やす。
