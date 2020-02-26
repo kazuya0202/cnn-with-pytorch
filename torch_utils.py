@@ -1,9 +1,11 @@
+import errno
 import itertools
+import os
 import random
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
@@ -64,10 +66,10 @@ class CreateDataset:
             test_size (Union[float, int]): test image size.
         """
 
-        self.path: str = path
-        self.extensions: List[str] = extensions
-        self.test_size: Union[float, int] = test_size
-        self.config_path: str = config_path
+        self.path = path
+        self.extensions = extensions
+        self.test_size = test_size
+        self.config_path = config_path
 
         # {'train': [], 'unknown': [], 'known': []}
         self.all_list: Dict[str, List[Data]]
@@ -134,28 +136,26 @@ class CreateDataset:
         _dir = Path(self.config_path)
         _dir.mkdir(parents=True, exist_ok=True)
 
-        def __inner_execute(path: Path, target: str, head: str = ''):
-            with path.open('w') as f:
-                f.write(head)
+        def _inner_execute(path: Path, target: str, head: str = ''):
+            file_ = ul.LogFile(path, std_debug_ok=False)
 
-                for x in self.all_list[target]:
-                    p = Path(x.path).resolve()  # convert to absolute path
-                    f.write(p.as_posix() + '\n')
+            for x in self.all_list[target]:
+                p = Path(x.path).resolve()  # convert to absolute path
+                file_.writeline(p.as_posix())
 
-        # # -- train image path
+            file_.close()
+
+        # -- train image path
         path = _dir.joinpath('train_used_images.txt')
-        __inner_execute(path, 'train')
-        # __execute(path, 'train', '--- Image used for training. ---\n')
+        _inner_execute(path, 'train')
 
-        # # -- unknown image path
+        # -- unknown image path
         path = _dir.joinpath('unknown_used_images.txt')
-        __inner_execute(path, 'unknown')
-        # __execute(path, 'unknown', '--- Image used for unknown testing. ---\n')
+        _inner_execute(path, 'unknown')
 
-        # # -- known image path
+        # -- known image path
         path = _dir.joinpath('known_used_images.txt')
-        __inner_execute(path, 'known')
-        # __execute(path, 'known', '--- Image used for known testing. ---\n')
+        _inner_execute(path, 'known')
 
     # end of [function] __write_config
 # end of [class] CreateDataset
@@ -183,14 +183,14 @@ class CustomDataset(Dataset):
         self.list_size = len(self.target_list)
     # end of [function] __init__
 
-    def __getitem__(self, idx: int):
-        """ Returns image data, label, class name
+    def __getitem__(self, idx: int) -> Tuple[np.ndarray, int, str]:
+        """ Returns image data, label, path
 
         Args:
             idx (int): index of list.
 
         Returns:
-            tuple: image data, label, name
+            tuple: image data, label, path
         """
         x = self.target_list[idx]
         path, label, name = x.items()
@@ -201,7 +201,7 @@ class CustomDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, label, name, path
+        return img, label, path
     # end of [function] __getitem__
 
     def __len__(self):
@@ -218,29 +218,27 @@ class CustomDataset(Dataset):
 @dataclass(init=False)
 class Model:
     """ Basic parameters for model. """
-
     def __init__(
             self,
             toml_settings: Optional[_tms.TomlSettings] = None,
-            classes: Optional[dict] = None,
+            classes: Optional[Dict[int, str]] = None,
             use_gpu: bool = True,
-            log: Optional[ul.LogFile] = None,
-            rate: Optional[ul.LogFile] = None,
-            load_pth_path: Optional[str] = None) -> None:
-        """
-        Args:
-            toml_settings (_tms.TomlSettings): parameters of user's setting.
-            classes (Optional[dict], optional): classes of dataset. Defaults to None.
-            use_gpu (bool, optional): uisng gpu or cpu. Defaults to False.
-            log (Optional[ul.LogFile], optional): logging for debug log. Defaults to None.
-            rate (Optional[ul.LogFile], optional): logging for rate log. Defaults to None.
-            load_pth_path (Optional[str], optional): pth(model) path. Defaults to None.
+            **options):
+        """[summary]
 
-        `load_pth_path` is not None -> load pth automatically.
-        `classes` is None -> load from 'config/classes.txt' if pth load is False,
-                             load from pth checkpoint if pth laod is True.
-        `use_gpu` is assigned False automatically if cuda is not available.
+        Args:
+            toml_settings (Optional[_tms.TomlSettings], optional): [description]. Defaults to None.
+            classes (Optional[Dict[int, str]], optional): [description]. Defaults to None.
+            use_gpu (bool, optional): [description]. Defaults to True.
+
+        **options
+            log (ul.LogFile): Defaults to None.
+            rate (ul.LogFile): Defaults to None.
         """
+
+        # **options
+        log = options.pop('log', None)
+        rate = options.pop('rate', None)
 
         # network configure
         self.net: cnn.Net  # network
@@ -249,8 +247,6 @@ class Model:
 
         self.classes: Dict[int, str]  # class
         self.input_size = toml_settings.input_size  # image size when input to network
-        self.load_pth_path = load_pth_path  # pth path
-        self.current_epoch: int  # for load pth
 
         # gpu setting
         self.use_gpu = torch.cuda.is_available() and use_gpu
@@ -264,10 +260,9 @@ class Model:
         self.writer = tbx.SummaryWriter()
 
         # assign or load from classes.txt
-        if load_pth_path is None:
-            cls_txt = f'{toml_settings.config_path}/classes.txt'
-            self.classes = classes if classes is not None \
-                else ul.load_classes(cls_txt).copy()
+        cls_txt = f'{toml_settings.config_path}/classes.txt'
+        self.classes = classes if classes is not None \
+            else ul.load_classes(cls_txt).copy()
 
         # create instance if log is None
         self.log = log if log is not None else ul.LogFile(None)
@@ -275,16 +270,23 @@ class Model:
         # create instance if rate is None
         self.rate = rate if rate is not None else ul.LogFile(None)
 
-        # build model by cnn.py or load model
-        self.__build_model()
+        # build model
+        self._build_model()
 
         # save classes
-        self.__write_classes()
-
-        # classes.txt is EOF or classes is None
-        if self.classes is {}:
-            print('classes is {}')
+        self._write_classes()
     # end of [function] __init__
+
+    def _build_model(self):
+        self.net = cnn.Net(input_size=self.input_size)  # network
+
+        # self.optimizer = optim.SGD(self.net.parameters(), lr=0.01)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
+        self.criterion = nn.CrossEntropyLoss()
+
+        self.net.zero_grad()  # init all gradient
+        self.net.to(self.device)  # switch to GPU / CPU
+    # end of [function] _build_model
 
     def inherit_params(self, model: 'Model'):
         """ Inherit from [TrainModel], [TestModel].
@@ -297,75 +299,27 @@ class Model:
         for k in model.__dict__.keys():
             expression = f'self.{k} = model.{k}'
             exec(expression)
+    # end of [function] inherit_params
 
-    def __build_model(self):
-        r""" Building model.
-
-        * load pth
-            -> network: load from pth model.
-            -> optimizer: Adam algorithm.
-            -> criterion: Cross Entropy Loss algorithm.
-
-            -> classes: load from pth model.
-            -> epoch: load from pth model.
-
-        * do not load pth
-            -> network: Net(cnn.py) instance and init gradient.
-            -> optimizer: Adam algorithm.
-            -> criterion: Cross Entropy Loss algorithm.
-        """
-
-        self.net = cnn.Net(input_size=self.input_size)  # network
-
-        # self.optimizer = optim.SGD(self.net.parameters(), lr=0.01)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=pow(10, -8))
-        self.criterion = nn.CrossEntropyLoss()
-
-        # load
-        if self.load_pth_path is None:
-            self.net.zero_grad()  # init all gradient
-        else:
-            # check exist
-            if not Path(self.load_pth_path).exists():
-                print(f'{self.load_pth_path} is not exist.')
-
-            # load checkpoint
-            checkpoint = torch.load(self.load_pth_path)
-
-            # classes, network
-            self.classes = checkpoint['classes']
-            self.net.load_state_dict(checkpoint['model_state_dict'])
-            self.current_epoch = checkpoint['epoch']
-
-            # criterion = checkpoint['criterion']
-            # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
-        self.net.to(self.device)  # switch to GPU / CPU
-    # end of [function] __build_model
-
-    def save_model(self, path: str, epoch: Optional[int] = None, _save: bool = False):
+    def save_model(self, path: str):
         """ Save Model.
 
         Args:
             path (str): save path.
             epoch (Optional[int], optional): epoch num. Defaults to None.
-            _save (bool, optional): save. for debug. Defaults to False.
         """
-
-        if not _save:  # for debug
-            return
 
         torch.save({
             'classes': self.classes,
-            'epoch': epoch,
             'model_state_dict': self.net.state_dict(),
 
+            # 'epoch': epoch,
             # 'optimizer_state_dict': self.optimizer.state_dict(),
             # 'criterion': type(self.criterion).__name__
         }, path)
     # end of [function] save_model
 
-    def __write_classes(self):
+    def _write_classes(self):
         """ Writing classes of dataset. """
 
         _dir = Path(self.tms.config_path)
@@ -409,10 +363,9 @@ class TestModel(Model):
     # end of [function] __init__
 
     def test(self, epoch: Optional[int] = None):
-        self.net.eval()
         self.log.writeline('# Start testing.\n', False)
 
-        def __inner_execute(data_loader: DataLoader, target: str = 'unknown'):
+        def _inner_execute(data_loader: DataLoader, target: str = 'unknown'):
             """ Execute unknown or known dataset.
 
             Args:
@@ -420,96 +373,101 @@ class TestModel(Model):
                 tqdm_desc (str, optional): description for tqdm. Defaults to ''.
             """
 
-            total_acc = 0  # total accuracy
+            with torch.no_grad():
+                self.net.eval()
 
-            # acc of each class | {'cls_name': [acc_num, all_num]}
-            acc_size = dict([(_cls, [0, 0]) for _cls in self.classes.keys()])
+                total_acc = 0  # total accuracy
 
-            # test
-            pbar = tqdm(data_loader, total=len(data_loader),
-                        ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
-            pbar.set_description('TEST[{}]'.format(target.center(7)))
+                # acc of each class | {'cls_name': [acc_num, all_num]}
+                acc_size = dict([(_cls, [0, 0]) for _cls in self.classes.keys()])
 
-            # for data, label, name in self.test_data:
-            for batch_idx, items in enumerate(pbar):
-                # img, label, name, path
-                img, label, _, path = items
+                # test
+                pbar = tqdm(data_loader, total=len(data_loader),
+                            ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
+                pbar.set_description('TEST[{}]'.format(target.center(7)))
 
-                img = img.to(self.device)
-                label = label.to(self.device)
+                # for data, label, name in self.test_data:
+                for batch_idx, items in enumerate(pbar):
+                    # img, label, path
+                    img, label, path = items
 
-                out = self.net(img).to(self.device)  # data into model
-                predicted = torch.max(out.data, 1)[1].cpu().numpy()[0]  # predicted label
-                label_ans = label.cpu().numpy()[0]  # correct label
+                    img = img.to(self.device)
+                    label = label.to(self.device)
 
-                # pred_cls = self.classes[predicted]  # predicted class name
-                # ans_cls = self.classes[label_ans]  # correct class name
+                    out = self.net(img).to(self.device)  # data into model
+                    predicted = torch.max(out.data, 1)[1].cpu().numpy()[0]  # predicted label
+                    label_ans = label.cpu().numpy()[0]  # correct label
 
-                acc_size[label_ans][1] += 1  # count of test size
+                    # pred_cls = self.classes[predicted]  # predicted class name
+                    # ans_cls = self.classes[label_ans]  # correct class name
 
-                # correct -> continue
-                if predicted == label_ans:
-                    acc_size[label_ans][0] += 1  # count of acc size
-                    continue
+                    acc_size[label_ans][1] += 1  # count of test size
 
-                # mistake
-                # do not Grad-CAM -> continue
-                if not self.tms.is_grad_cam:
-                    continue
+                    # correct -> continue
+                    if predicted == label_ans:
+                        acc_size[label_ans][0] += 1  # count of acc size
+                        continue
 
-                # Grad-CAM
-                ret = self.egc.main(self.net, path)
+                    # mistake
+                    # do not Grad-CAM -> continue
+                    if not self.tms.is_grad_cam:
+                        continue
 
-                # base path
-                exp_path_base = Path(self.tms.grad_cam_path, self.tms.filename_base,
-                                     'false', target, f'epoch_{epoch + 1}')
-                exp_path_base.mkdir(parents=True, exist_ok=True)
+                    # Grad-CAM
+                    ret = self.egc.main(self.net, path)
 
-                for key, _list in ret.items():
-                    for i, img in enumerate(_list):
-                        # save path
-                        _name = f'{batch_idx}_{self.classes[i]}_{key}'
-                        _name += f'_pred[{predicted}]_correct[{label_ans}].png'
-                        _path = exp_path_base.joinpath(_name)
+                    # base path
+                    exp_path_base = Path(self.tms.grad_cam_path, self.tms.filename_base,
+                                         'false', target, f'epoch_{epoch + 1}')
+                    exp_path_base.mkdir(parents=True, exist_ok=True)
 
-                        cv2.imwrite(str(_path), img)  # save
+                    for key, _list in ret.items():
+                        for i, img in enumerate(_list):
+                            # save path
+                            ss = f'{batch_idx}_{self.classes[i]}_{key}'
+                            ss += f'_pred[{predicted}]_correct[{label_ans}].png'
+                            _path = exp_path_base.joinpath(ss)
 
-                        # for debug
-                        # plt.imshow(img_data)
-                        # plt.pause(0.1)
-                # end of this batch
+                            cv2.imwrite(str(_path), img)  # save
 
-            self.log.writeline()
+                            # for debug
+                            # plt.imshow(img_data)
+                            # plt.pause(0.1)
 
-            # calc each accuracy
-            for k, _cls in self.classes.items():
-                acc_num, all_num = acc_size[k]
+                    # end of this batch
 
-                acc = acc_num / all_num
-                total_acc += acc
+                self.log.writeline()
 
-                _name = f'%-12s -> acc: {acc:<.4f} ({acc_num} / {all_num} images.)' % f'[{_cls}]'
-                self.log.writeline(_name, debug_ok=False)
-                print(f'  {_name}')
+                # calc each accuracy
+                for k, _cls in self.classes.items():
+                    acc_num, all_num = acc_size[k]
 
-                # end of calculate accuracy of each class and total
+                    acc = acc_num / all_num
+                    total_acc += acc
 
-            self.log.writeline()
+                    ss = '%-12s -> ' % f'[{_cls}]'
+                    ss += f'acc: {acc:<.4f} ({acc_num} / {all_num} images.)'
+                    self.log.writeline(ss, debug_ok=False)
+                    print(f'  {ss}')
 
-            # total accuracy
-            total_acc /= len(self.classes)
-            self.log.writeline(f'Total acc: {total_acc}\n', debug_ok=False)
+                    # end of calculate accuracy of each class and total
 
-            # for tqdm
-            print(f'  Total acc: {total_acc}\n')
+                self.log.writeline()
+
+                # total accuracy
+                total_acc /= len(self.classes)
+                self.log.writeline(f'Total acc: {total_acc}\n', debug_ok=False)
+
+                # for tqdm
+                print(f'  Total acc: {total_acc}\n')
         # end of [function] __execute
 
         # unknown test
-        __inner_execute(self.unknown_data, 'unknown')
+        _inner_execute(self.unknown_data, 'unknown')
 
         # knwon test
         if self.known_data is not None:
-            __inner_execute(self.known_data, 'known')
+            _inner_execute(self.known_data, 'known')
     # end of [function] test
 # end of [class] TestModel
 
@@ -538,20 +496,22 @@ class TrainModel(Model):
         self.test_model = test_model  # TestModel
 
         # schedule by cycle
-        self.test_schedule = self.__create_schedule(self.tms.test_cycle)
-        self.pth_save_schedule = self.__create_schedule(self.tms.pth_save_cycle)
+        self.test_schedule = self._create_schedule(self.tms.test_cycle)
+        self.pth_save_schedule = self._create_schedule(self.tms.pth_save_cycle)
 
         # for making confusion matrix
         self.all_label = torch.tensor([], dtype=torch.long)
         self.all_pred = torch.tensor([], dtype=torch.long)
 
         # for making false path
-        _base = Path(self.tms.false_path, self.tms.filename_base)
-        self.false_paths = [_base.joinpath(f'epoch{ep}') for ep in range(self.max_epoch)]
+        base = Path(self.tms.false_path, self.tms.filename_base)
+        self.false_paths = [base.joinpath(f'epoch{ep}') for ep in range(self.max_epoch)]
+        ul.make_directories(*self.false_paths)
 
-        # mkdir
-        for path in self.false_paths:
-            path.mkdir(parents=True, exist_ok=True)
+        if self.tms.pth_save_cycle != 0:
+            self.pth_save_path = f'{self.tms.pth_save_path}/{self.tms.filename_base}'
+            ul.make_directories(self.pth_save_path)
+
     # end [function] __init__
 
     def train(self):
@@ -579,7 +539,12 @@ class TrainModel(Model):
 
             # batch process
             for batch_idx, items in enumerate(outer_pbar):
-                imgs, labels, names, paths = items
+                imgs: torch.Tensor
+                labels: torch.Tensor
+                paths: torch.Tensor
+
+                imgs, labels, paths = items
+
                 self.optimizer.zero_grad()  # init gradient
 
                 batch_size = len(imgs)  # batch size
@@ -590,14 +555,14 @@ class TrainModel(Model):
                 sep = np.linspace(0, batch_size, subdivision + 1, dtype=np.int)
 
                 # mini batch process
-                for sv in range(subdivision):
-                    n, m = sep[sv], sep[sv + 1]  # cutout data (N ~ M)
+                for sd in range(subdivision):
+                    n, m = sep[sd], sep[sd + 1]  # cutout data (N ~ M)
                     mb_imgs = imgs[n:m].to(self.device)
                     mb_labels = labels[n:m].to(self.device)
 
                     mb_result = self.net(mb_imgs)  # data into model
                     loss = self.criterion(mb_result, mb_labels)  # calculate loss
-                    loss.backward()  # calculate gradient
+                    loss.backward()  # calculate gradient (back propagation)
 
                     # concatenate result
                     batch_result = torch.cat((batch_result, mb_result.cpu()), dim=0)
@@ -630,7 +595,7 @@ class TrainModel(Model):
                 # save image of mistake prediction
                 for idx in false_step:
                     fp = self.false_paths[ep]
-                    name = Path(paths[idx]).name
+                    name = Path(str(paths[idx])).name
 
                     img_path = Path(fp, f'batch_{batch_idx}-{name}')
                     img_path.parent.mkdir(parents=True, exist_ok=True)
@@ -661,8 +626,9 @@ class TrainModel(Model):
                 # end of this batch
 
             # add confusion matrix to tensorboard
-            add_confusion_matrix_to_tensorboard(
-                self.writer, self.all_label, self.all_pred, list(self.classes.values()), ep)
+            cm = calc_confusion_matrix(self.all_label, self.all_pred, len(self.classes))
+            fig = plot_confusion_matrix(cm, list(self.classes.values()))
+            add_to_tensorboard(self.writer, fig, 'confusion matrix', ep)
 
             # calclate total loss / accuracy
             size = len(self.train_data.dataset)
@@ -690,10 +656,10 @@ class TrainModel(Model):
             # save pth cycle
             if self.pth_save_schedule[ep]:
                 save_path = ul.create_file_path(
-                    self.tms.pth_save_path, '', head=f'epoch{ep + 1}', ext='pth')
+                    self.pth_save_path, '', head=f'epoch{ep + 1}', ext='pth')
 
                 progress = ul.ProgressLog(f'Saving model to \'{save_path}\'')
-                self.save_model(save_path, _save=False)  # save
+                self.save_model(save_path)  # save
                 progress.complete()
 
                 # log
@@ -709,7 +675,7 @@ class TrainModel(Model):
         # end of all epoch
     # end of [function] train
 
-    def __create_schedule(self, cycle: int) -> List[bool]:
+    def _create_schedule(self, cycle: int) -> List[bool]:
         """ Returns exec schedule of cycle.
 
         Args:
@@ -733,134 +699,17 @@ class TrainModel(Model):
 # end of [class] TrainModel
 
 
-@dataclass(init=False)
-class ValidModel(Model):
-    def __init__(
-            self,
-            load_pth_path: str,
-            use_gpu: bool = True,
-            toml_settings: Optional[_tms.TomlSettings] = None,
-            transform: transforms = None) -> None:
-
-        """
-        Args:
-            load_pth_path (str): pth path to load.
-            use_gpu (bool, optional): using gpu or cpu. Defaults to False.
-            toml_settings (_tms.TomlSettings, optional): global settings. Defaults to None.
-            transform (transforms, optional): tensor transform. Defaults to None.
-        """
-
-        # super constructor
-        super().__init__(toml_settings=toml_settings, use_gpu=use_gpu)
-
-        if transform is None:
-            # transform
-            transform = transforms.Compose([
-                transforms.Resize(self.tms.input_size),
-                transforms.ToTensor()])
-
-        self.transform = transform
-    # end of [function] __init__
-
-    def valid(self, image_path: str) -> 'PredictedResult':
-        """ Validing model by single image.
-
-        Args:
-            image_path (str): image path to valid.
-
-        Raises:
-            FileNotFoundError: is occured if image path is not exist.
-
-        Returns:
-            PredictedData: result of predicted.
-        """
-
-        self.net.eval()  # switch to eval
-
-        # path is not exist -> PredictedData default value
-        if not Path(image_path).exists():
-            # raise FileNotFoundError
-            return PredictedResult()
-
-        # get image as tensor
-        img = self.__get_image_as_tensor(image_path)
-
-        # input to model
-        x = self.net(img)
-        pred = torch.max(x.data, 1)[1].cpu().numpy()
-        label = pred[0]
-
-        name = self.classes[label]
-
-        return PredictedResult(label, name)
-    # end of [function] valid
-
-    def __get_image_as_tensor(self, image_path: str) -> torch.Tensor:
-        """ Get image data as tensor type.
-
-        Args:
-            image_path (str): image path
-
-        Returns:
-            torch.Tensor: tensor of image data
-        """
-
-        img = Image.open(image_path)
-        img = img.convert('RGB')
-
-        # transform
-        # if self.transform is not None:
-        img = self.transform(img)
-
-        # add fake dimension
-        #   [unsqueeze] referene -> <https://pytorch.org/docs/stable/torch.html#torch.unsqueeze>
-        img = torch.unsqueeze(img, 0)  # OR `img.unsqueeze_(0)`
-        img = img.to(self.device)
-
-        return img
-    # end of [function] __process_image
-# end of [class] ValidModel
-
-
-@dataclass
-class PredictedResult:
-    """ Predicted result.
-
-        Args:
-            label (int, optional): label of classes. Defaults to -1.
-            name (str, optional): class name. Defaults to 'None'.
-            rate (float, optional): accuracy rate. Defaults to 0.0.
-    """
-
-    label: int = -1
-    name: str = 'None'
-    rate: float = 0.0
-# end of [class] PredictedData
-
-
-def add_confusion_matrix_to_tensorboard(
-        writer: tbx.SummaryWriter,
-        correct_labels: Union[torch.Tensor, np.ndarray],
-        predicted_labels: Union[torch.Tensor, np.ndarray],
-        classes: List[str],
-        current_epoch: int):
-
-    cm = calc_confusion_matrix(correct_labels, predicted_labels, len(classes))
-    fig = plot_confusion_matrix(cm, classes)
-    add_to_tensorboard(writer, fig, current_epoch)
-# end of [function] add_confusion_matrix_to_tensorboard
-
-
 def add_to_tensorboard(
         writer: tbx.SummaryWriter,
         fig: plt.figure,
-        step: int):
+        title: str,
+        step: int = 0):
 
     fig.canvas.draw()
     img = fig.canvas.renderer._renderer
     img_ar = np.array(img).transpose(2, 0, 1)
 
-    writer.add_image('confusion matrix', img_ar)
+    writer.add_image(title, img_ar)
     plt.close()
 # end of [function] add_to_tensorboard
 
@@ -921,7 +770,6 @@ def plot_confusion_matrix(
         clr = 'white' if cm[i, j] > thresh else 'black'
         axes.text(j, i, format(cm[i, j], fmt), ha='center', va='center', color=clr)
 
-    # plt.show()
     plt.tight_layout()
     fig = plt.gcf()
     return fig

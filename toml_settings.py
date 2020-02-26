@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Optional, Tuple, Union
+
 import toml
 
 # my packages
@@ -16,17 +17,17 @@ def apply_settings(target: dict, src: dict):
             target <- src
     """
 
-    keys: str
+    key: str
     vals: dict
 
     # overwrite
-    for keys, vals in src.items():
+    for key, vals in src.items():
         for k, v in vals.items():
             # if key is not exist
-            if not(keys in target and k in target[keys]):
+            if not(key in target and k in target[key]):
                 continue
 
-            target[keys][k] = v
+            target[key][k] = v
 # end of [function] apply_settings
 
 
@@ -58,6 +59,10 @@ def factory(
         else paths['default']
     user_path = user_path if user_path is not None \
         else paths['user']
+
+    # raise
+    ul.raise_when_FileNotFound(default_path)
+    ul.raise_when_FileNotFound(user_path)
 
     pre_toml = toml.load(default_path)
     usr_toml = toml.load(user_path)

@@ -1,9 +1,9 @@
 ## WANT TO DO
 
+
 + RuntimeWarning: invalid value encountered in less
   xa[xa < 0] = -1
   + https://teratail.com/questions/190718
-
 
 + torchaudio + nnAudio -> spectrogram
   + or torchaudioのみ
