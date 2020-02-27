@@ -22,12 +22,12 @@
 
 ## Usage
 
-1. `user-settings.toml`を編集する[^1]
+1. `user-settings.toml`を編集する [^1]
 
    + データセットのパス
    + エポック数　...
 
-2. スクリプトを実行する[^2]
+2. スクリプトを実行する [^2]
 
    ```sh
    $ python main.py
@@ -39,7 +39,7 @@
 
 [^1]: `user-settings.toml`の記述が正しくない場合、以下のようなエラーが出る。
 
-<summary>クリックして展開</summary><details>
+<details><summary>クリックして展開</summary>
 
 ```sh
 $ python main.py
