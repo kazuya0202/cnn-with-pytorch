@@ -16,29 +16,34 @@ import cnn
 
 @dataclass
 class PredictedResult:
-    """ Predicted result.
+    r"""Predicted result.
 
-        Args:
-            label (int, optional): label of classes. Defaults to -1.
-            name (str, optional): class name. Defaults to 'None'.
-            rate (float, optional): accuracy rate. Defaults to 0.0.
+    Args:
+        label (int, optional): label of classes. Defaults to -1.
+        name (str, optional): class name. Defaults to 'None'.
+        rate (float, optional): accuracy rate. Defaults to 0.0.
     """
 
     label: int = -1
     name: str = 'None'
-    rate: float = 0.0
+    rate: float = 0.
 # end of [class] PredictedData
 
 
 @dataclass(init=False)
-class ValidModel():
-    def __init__(
-            self,
-            load_pth_path: str,
-            use_gpu: bool = True,
-            input_size: tuple = (60, 60),
-            transform: transforms = None):
+class ValidModel:
+    def __init__(self, load_pth_path: str, use_gpu: bool = True,
+                 input_size: tuple = (60, 60), transform: transforms = None) -> None:
+        r"""
+        Args:
+            load_pth_path (str): pth path for loading.
+            use_gpu (bool, optional): gpu. Defaults to True.
+            input_size (tuple, optional): input image size. Defaults to (60, 60).
+            transform (transforms, optional): transform. Defaults to None.
 
+        Raises:
+            FileNotFoundError: file not exists.
+        """
         # device
         use_gpu = use_gpu and torch.cuda.is_available()
         self.device = torch.device('cuda' if use_gpu else 'cpu')
@@ -55,9 +60,19 @@ class ValidModel():
                 transforms.ToTensor()])
 
         self.transform = transform
-    # end
+    # end of [function] __init__
 
     def _load_model(self, pth_path: str):
+        # TODO: overwrite this by tu.Model.
+
+        """Loading model.
+
+        Args:
+            pth_path (str): pth path.
+
+        Raises:
+            FileNotFoundError: file not exists.
+        """
         # check exist
         if not os.path.exists(pth_path):
             err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), pth_path)
@@ -67,9 +82,7 @@ class ValidModel():
 
         # self.optimizer = optim.SGD(self.net.parameters(), lr=0.01)
         self.optimizer = optim.Adam(
-            self.net.parameters(), lr=0.001, betas=(
-                0.9, 0.999), eps=pow(
-                10, -8))
+            self.net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=pow(10, -8))
         self.criterion = nn.CrossEntropyLoss()
 
         # load checkpoint
@@ -84,9 +97,10 @@ class ValidModel():
         # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
         self.net.to(self.device)  # switch to GPU / CPU
+        self.net.eval()  # switch to eval
 
     def valid(self, image_path: str) -> 'PredictedResult':
-        """ Validing model by single image.
+        r"""Validing model by single image.
 
         Args:
             image_path (str): image path to valid.
@@ -97,16 +111,13 @@ class ValidModel():
         Returns:
             PredictedData: result of predicted.
         """
-
-        self.net.eval()  # switch to eval
-
         # path is not exist -> PredictedData default value
         if not os.path.exists(image_path):
             # raise FileNotFoundError
             return PredictedResult()
 
         # get image as tensor
-        img = self._get_image_as_tensor(image_path)
+        img = self.preprocess(image_path)
 
         # input to model
         x = self.net(img)
@@ -118,8 +129,8 @@ class ValidModel():
         return PredictedResult(label, name)
     # end of [function] valid
 
-    def _get_image_as_tensor(self, image_path: str) -> torch.Tensor:
-        """ Get image data as tensor type.
+    def preprocess(self, image_path: str) -> torch.Tensor:
+        r"""Get image data as tensor type.
 
         Args:
             image_path (str): image path
@@ -127,12 +138,10 @@ class ValidModel():
         Returns:
             torch.Tensor: tensor of image data
         """
-
         img = Image.open(image_path)
         img = img.convert('RGB')
 
         # transform
-        # if self.transform is not None:
         img = self.transform(img)
 
         # add fake dimension
@@ -141,7 +150,7 @@ class ValidModel():
         img = img.to(self.device)
 
         return img
-    # end of [function] __process_image
+    # end of [function] preprocess
 
 
 if __name__ == '__main__':

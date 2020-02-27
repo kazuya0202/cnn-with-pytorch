@@ -1,60 +1,32 @@
 import torch.nn as nn
 import torch.nn.functional as F
-import torch
+from torch import Tensor
 
 
 class Net(nn.Module):
-    def __init__(self, input_size):
+    def __init__(self, input_size: tuple) -> None:
         super(Net, self).__init__()
 
-        hei_input = input_size[0] // 4
-        cnn2 = input_size[1] // 4
+        hei_ = input_size[0] // 4
+        wid_ = input_size[1] // 4
 
-        self.conv1 = nn.Conv2d(
-            in_channels=3,
-            out_channels=96,
-            kernel_size=7,
-            padding=3,
-            stride=1)
+        # -- using parameters of pytorch module --
+        # nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
+        # nn.BatchNorm2d(num_features)
+
+        self.conv1 = nn.Conv2d(3, 96, kernel_size=7, stride=1, padding=3)
         self.bn1 = nn.BatchNorm2d(96)
-        self.conv2 = nn.Conv2d(
-            in_channels=96,
-            out_channels=128,
-            padding=2,
-            stride=1,
-            kernel_size=5)
+        self.conv2 = nn.Conv2d(96, 128, kernel_size=5, stride=1, padding=2)
         self.bn2 = nn.BatchNorm2d(128)
-        self.conv3 = nn.Conv2d(
-            in_channels=128,
-            out_channels=256,
-            padding=1,
-            stride=1,
-            kernel_size=3)
-        self.conv4 = nn.Conv2d(
-            in_channels=256,
-            out_channels=384,
-            padding=1,
-            stride=1,
-            kernel_size=3)
-        self.conv5 = nn.Conv2d(
-            in_channels=384,
-            out_channels=256,
-            padding=1,
-            stride=1,
-            kernel_size=3)
-        # self.fc6 = nn.Linear(256 * 16 * 16, 2048)
-
-        # self.fc6 = nn.Linear(256 * in_height * in_width, 1024)
-        # self.fc7 = nn.Linear(1024, 512)
-        # self.fc8 = nn.Linear(512, 3)
-        self.fc6 = nn.Linear(256 * hei_input * cnn2, 2048)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1)
+        self.conv4 = nn.Conv2d(256, 384, kernel_size=3, stride=1, padding=1)
+        self.conv5 = nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1)
+        self.fc6 = nn.Linear((256 * hei_ * wid_), 2048)
         self.fc7 = nn.Linear(2048, 512)
         self.fc8 = nn.Linear(512, 3)
     # end of [function] __init__
 
-    # from pytorch_memlab import profile
-    # @profile
-    def forward(self, x) -> torch.Tensor:
+    def forward(self, x) -> Tensor:
         x = F.relu(self.conv1(x))
         x = self.bn1(x)
         x = F.relu(self.conv2(x))
@@ -65,10 +37,7 @@ class Net(nn.Module):
         x = F.relu(self.conv5(x))
         x = F.max_pool2d(x, 2)
 
-        # self.fc6 の input 計算用
-        # print(x.size())
-
-        x = x.view(-1, num_flat_features(x))
+        x = x.view(-1, num_flat_features(x))  # resize tensor
         x = F.relu(self.fc6(x))
         x = F.relu(self.fc7(x))
         x = self.fc8(x)
@@ -78,14 +47,13 @@ class Net(nn.Module):
 
         return x
     # end of [function] forward
-
-    # end of [function] num_flat_features
 # end of [class] Net
 
 
-def num_flat_features(x):
+def num_flat_features(x) -> int:
     size = x.size()[1:]  # all dimensions except the batch dimension
     num_features = 1
     for s in size:
         num_features *= s
     return num_features
+# end of [function] num_flat_features

@@ -77,7 +77,7 @@ is_save_debug_log = true
 is_save_rate_log = true
 
 # 構築したネットワーク、クラスなどを出力するかどうか
-is_print_network_difinition = true
+is_show_network_difinition = true
 
 [gradcam]
 # Grad CAM 画像の保存先

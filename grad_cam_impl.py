@@ -17,7 +17,7 @@ class _BaseWrapper(object):
 
     def forward(self, image):
         self.image_shape = image.shape[2:]
-        self.logits = self.model(image)
+        self.logits = self.model(image).requires_grad_()
         self.probs = F.softmax(self.logits, dim=1)
         return self.probs.sort(dim=1, descending=True)  # ordered results
 
@@ -42,7 +42,7 @@ class _BaseWrapper(object):
 
 class BackPropagation(_BaseWrapper):
     def forward(self, image):
-        self.image = image.requires_grad_()
+        self.image: torch.Tensor = image.requires_grad_()
         return super(BackPropagation, self).forward(self.image)
 
     def generate(self):

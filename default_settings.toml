@@ -62,7 +62,7 @@ is_save_debug_log = true
 is_save_rate_log = true
 
 # network definition
-is_print_network_difinition = true
+is_show_network_difinition = true
 
 [gradcam]
 # save path of grad cam images

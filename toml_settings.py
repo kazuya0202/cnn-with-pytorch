@@ -109,7 +109,7 @@ class TomlSettings:
         self.log_path: str
         self.is_save_debug_log: bool
         self.is_save_rate_log: bool
-        self.is_print_network_difinition: bool
+        self.is_show_network_difinition: bool
 
         # [gradcam]
         self.is_grad_cam: bool
