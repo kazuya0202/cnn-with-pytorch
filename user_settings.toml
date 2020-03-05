@@ -22,8 +22,8 @@ load_pth_path = './model.pth'
 
 [dataset]
 # データセットのパス(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
-# dataset_path = './recognition_datasets/Images/'
-dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+dataset_path = './recognition_datasets/Images/'
+# dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
 # dataset_path = 'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
     # ====================================== #
     #  Images/                <- ここを指定
@@ -61,7 +61,7 @@ width = 60
 epoch = 3
 
 # 1バッチの画像枚数(何枚ずつ行うか)
-batch = 128
+batch = 16
 
 # バッチの細分化
 subdivision = 4

@@ -255,18 +255,13 @@ class Model:
         self.device = torch.device('cuda' if use_gpu else 'cpu')
 
         # **options
-        log = options.pop('log', None)
-        rate = options.pop('rate', None)
-
-        # create instance if log is None
-        self.log = log if log is not None else ul.LogFile(None)
-        # create instance if rate is None
-        self.rate = rate if rate is not None else ul.LogFile(None)
+        self.log: ul.LogFile = options.pop('log', ul.LogFile(None))
+        self.rate: ul.LogFile = options.pop('rate', ul.LogFile(None))
 
         self.current_epoch: int
-        # self.classes: Dict[int, str]  # class
 
-        self.classes = classes
+        self.classes: Dict[int, str] = classes
+        self.classify_size: int = len(classes)
         self.input_size = tms.input_size  # image size when input to network
 
         # tensorboard
@@ -619,8 +614,9 @@ class Model:
             optimizer: `Adam`
             criterion: `CrossEntropyLoss`
         """
-
-        self.net = cnn.Net(self.input_size, self.tms.channels)  # network
+        # network
+        self.net = cnn.Net(self.input_size, self.classify_size,
+                           in_channels=self.tms.channels)
         self.optimizer = optim.Adam(
             self.net.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
         self.criterion = nn.CrossEntropyLoss()

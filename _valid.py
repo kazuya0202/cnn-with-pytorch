@@ -56,6 +56,7 @@ class ValidModel:
 
         # load model
         self._load_model(load_pth_path)
+        self.classify_size = len(self.classes)
 
         if transform is None:
             # transform

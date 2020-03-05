@@ -4,10 +4,10 @@ from torch import Tensor
 
 
 class Net(nn.Module):
-    def __init__(self, input_size: tuple, in_channels: int = 3) -> None:
+    def __init__(self, input_size: tuple, classify_size: int, in_channels: int = 3) -> None:
         super(Net, self).__init__()
 
-        hei_ = input_size[0] // 4
+        hei_ = input_size[0] // 4  # `4` depends on max_pool2d.
         wid_ = input_size[1] // 4
 
         # -- using parameters of pytorch module --
@@ -23,7 +23,7 @@ class Net(nn.Module):
         self.conv5 = nn.Conv2d(384, 256, kernel_size=3, stride=1, padding=1)
         self.fc6 = nn.Linear((256 * hei_ * wid_), 2048)
         self.fc7 = nn.Linear(2048, 512)
-        self.fc8 = nn.Linear(512, 3)
+        self.fc8 = nn.Linear(512, classify_size)
     # end of [function] __init__
 
     def forward(self, x) -> Tensor:
