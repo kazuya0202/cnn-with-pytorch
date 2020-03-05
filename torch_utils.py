@@ -13,6 +13,7 @@ import tensorboardX as tbx
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from PIL import Image
 from sklearn.model_selection import train_test_split
@@ -52,7 +53,7 @@ class CreateDataset(Dataset):
     r"""Creating dataset."""
 
     def __init__(self, path: str, extensions: list, test_size: Union[float, int],
-                 config_path: str = 'config') -> None:
+                 config_path: str = 'config', limit_size: int = None) -> None:
         r"""
         Args:
             path (str): path of image directory.
@@ -65,6 +66,7 @@ class CreateDataset(Dataset):
         self.extensions = extensions
         self.test_size = test_size
         self.config_path = config_path
+        self.limit_size = limit_size
 
         # {'train': [], 'unknown': [], 'known': []}
         self.all_list: Dict[str, List[Data]]
@@ -104,6 +106,11 @@ class CreateDataset(Dataset):
                 tmp = [Data(x.as_posix(), idx, _dir.name)
                        for x in _dir.glob(f'*.{ext}') if x.is_file()]
                 xs.extend(tmp)
+
+            # adjust to limit size
+            if self.limit_size is not None:
+                random.shuffle(xs)
+                xs = xs[:self.limit_size]
 
             # split dataset
             train, test = train_test_split(
@@ -191,7 +198,7 @@ class CustomDataset(Dataset):
         """
 
         self.transform = transform
-        self.target_list = target_list
+        self.target_list: List[Data] = target_list
         self.list_size = len(self.target_list)
     # end of [function] __init__
 
@@ -232,13 +239,13 @@ class Model:
     def __init__(self, classes, loader, tms: _tms.TomlSettings, **options) -> None:
         r"""
         **options
-            log (ul.LogFile) Defaults to None.
-            rate (ul.LogFile) Defaults to None.
+            log (ul.LogFile): Defaults to ul.LogFile(None).
+            rate (ul.LogFile): Defaults to ul.LogFile(None).
         """
 
-        self.train_loader = loader.pop('train', None)
-        self.unknown_loader = loader.pop('unknown', None)
-        self.known_loader = loader.pop('known', None)
+        self.train_loader: DataLoader = loader.pop('train', None)
+        self.unknown_loader: DataLoader = loader.pop('unknown', None)
+        self.known_loader: DataLoader = loader.pop('known', None)
 
         self.tms = tms  # toml settings
         self.max_epoch = tms.epoch
@@ -256,11 +263,6 @@ class Model:
         # create instance if rate is None
         self.rate = rate if rate is not None else ul.LogFile(None)
 
-        # network configure
-        self.net: cnn.Net  # network
-        self.optimizer: Union[optim.Adam, optim.SGD]  # optimizer
-        self.criterion: nn.CrossEntropyLoss  # criterion
-
         self.current_epoch: int
         # self.classes: Dict[int, str]  # class
 
@@ -270,14 +272,13 @@ class Model:
         # tensorboard
         self.writer = tbx.SummaryWriter()
 
-        # TODO
-        is_load = False  # for deubg
-        if not is_load:
-            self._build_model()  # build model
+        # -----
 
-        if is_load:
-            self._load_model('koko')
+        if tms.is_load_model:
+            self._load_model(tms.load_pth_path)
             self.max_epoch -= self.current_epoch  # 0 ~ (max_epoch-current_epoch) times.
+        else:
+            self._build_model()  # build model
 
         self._write_classes()  # save classes
 
@@ -290,7 +291,7 @@ class Model:
             self.pth_save_path = f'{self.tms.pth_save_path}/{self.tms.filename_base}'
             ul.make_directories(self.pth_save_path)
 
-        # Grad-CAM
+        # Grad-CAM setting
         self.egc = ExecuteGradCAM(
             list(self.classes.values()),
             tms.input_size,
@@ -315,6 +316,11 @@ class Model:
         self.log.writeline('# Start training.', False)
         plot_point = 0  # for tensorboard
 
+        # [optimizer, epoch]
+        save_option = [False, False]
+        if self.tms.is_available_re_training:
+            save_option = [True, True]
+
         # loop epoch
         for epoch in range(self.max_epoch):
             self.current_epoch = epoch + 1
@@ -322,20 +328,20 @@ class Model:
             total_loss = 0  # total loss
             total_acc = 0  # total accuracy
 
-            self.log.writeline(f'----- Epoch: {epoch + 1} -----')
+            self.log.writeline(f'----- Epoch: {epoch + 1} -----', debug_ok=True)
 
             subdivision = self.tms.subdivision
 
             # batch in one epoch (outer tqdm)
-            outer_pbar = tqdm(self.train_loader, total=len(self.train_loader),
-                              ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
-            outer_pbar.set_description('TRAIN')
+            pbar = tqdm(self.train_loader, total=len(self.train_loader),  # subdivision
+                        ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
+            pbar.set_description('TRAIN')
 
             # batch process
-            for batch_idx, items in enumerate(outer_pbar):
+            for batch_idx, items in enumerate(pbar):
                 imgs: Tensor
                 labels: Tensor
-                paths: Tensor
+                paths: tuple  # if type is not [int, float...], not tensor but tuple.
 
                 imgs, labels, paths = items
 
@@ -347,6 +353,10 @@ class Model:
 
                 # generate arithmetic progression of mini batch
                 sep = np.linspace(0, batch_size, subdivision + 1, dtype=np.int)
+
+                # make grid of using train images in batch.
+                # make_grid_and_plot(imgs)
+                # plt.pause(0.01)
 
                 # mini batch process
                 for sd in range(subdivision):
@@ -406,7 +416,7 @@ class Model:
                 acc = acc_cnt / batch_size  # accuracy
 
                 # for tqdm message
-                outer_pbar.set_postfix(
+                pbar.set_postfix(
                     ordered_dict=OrderedDict(loss=f'{loss_val:<.6f}', acc=f'{acc:<.6f}'))
 
                 # for log
@@ -414,9 +424,9 @@ class Model:
                 ss += f'\n  -> ans   : {label_ans}'
                 ss += f'\n  -> result: {predicted}'
 
-                self.log.writeline(ss, debug_ok=False)
+                self.log.writeline(ss)
 
-                break
+                # break
                 # end of this batch
 
             # add confusion matrix to tensorboard
@@ -430,10 +440,10 @@ class Model:
             total_acc = total_acc / size
 
             # for log
-            self.log.writeline('\n---------------', debug_ok=False)
-            self.log.writeline(f'Total loss: {total_loss}', debug_ok=False)
-            self.log.writeline(f'Total acc: {total_acc}', debug_ok=False)
-            self.log.writeline('---------------\n', debug_ok=False)
+            self.log.writeline('\n---------------')
+            self.log.writeline(f'Total loss: {total_loss}')
+            self.log.writeline(f'Total acc: {total_acc}')
+            self.log.writeline('---------------\n')
 
             # for tqdm
             print(f'  Total loss: {total_loss}')
@@ -453,11 +463,11 @@ class Model:
                     self.pth_save_path, '', head=f'epoch{epoch + 1}', ext='pth')
 
                 progress = ul.ProgressLog(f'Saving model to \'{save_path}\'')
-                self.save_model(save_path)  # save
+                self.save_model(save_path, *save_option)  # save
                 progress.complete()
 
                 # log
-                self.log.writeline(f'# Saved model to \'{save_path}\'', debug_ok=False)
+                self.log.writeline(f'# Saved model to \'{save_path}\'')
 
             # break
             # end of this epoch
@@ -471,7 +481,12 @@ class Model:
 
     def test(self):
         r"""Testing model."""
+        # log
         self.log.writeline('# Start testing.\n', False)
+
+        # ss = ul.set_align_center(str(self.current_epoch)) + ' | '
+        # self.rate.write(ss)
+        self.rate.write(self.current_epoch)
 
         def _inner_execute(data_loader: DataLoader, target: str = 'unknown'):
             """ Execute unknown or known dataset.
@@ -481,6 +496,7 @@ class Model:
                 tqdm_desc (str, optional): description for tqdm. Defaults to ''.
             """
 
+            # disable gradient
             with torch.no_grad():
                 self.net.eval()
 
@@ -494,10 +510,17 @@ class Model:
                             ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
                 pbar.set_description('TEST[{}]'.format(target.center(7)))
 
-                # for data, label, name in self.test_data:
                 for batch_idx, items in enumerate(pbar):
-                    # img, label, path
+                    img_data: Tensor
+                    label: Tensor
+                    path: tuple
+
+                    # img_data, label, path
                     img_data, label, path = items
+
+                    # only batch size is 1.
+                    if len(path) == 1:
+                        path = path[0]
 
                     img_data = img_data.to(self.device)
                     label = label.to(self.device)
@@ -526,7 +549,7 @@ class Model:
 
                     # base path
                     base_dir = Path(self.tms.grad_cam_path, self.tms.filename_base,
-                                    'false', target, f'epoch_{self.current_epoch + 1}')
+                                    'false', target, f'epoch_{self.current_epoch}')
                     base_dir.mkdir(parents=True, exist_ok=True)
 
                     for key, data_list in ret.items():
@@ -541,7 +564,6 @@ class Model:
                             # for debug
                             # plt.imshow(img_data)
                             # plt.pause(0.1)
-
                     # end of this batch
 
                 self.log.writeline()
@@ -555,8 +577,13 @@ class Model:
 
                     ss = '%-12s -> ' % f'[{_cls}]'
                     ss += f'acc: {acc:<.4f} ({acc_num} / {all_num} images.)'
-                    self.log.writeline(ss, debug_ok=False)
+                    self.log.writeline(ss)
                     print(f'  {ss}')
+
+                    # rate log
+                    # ss = ul.set_align_ljust(str(acc), align=15)
+                    # self.rate.write(ss)
+                    self.rate.write(f', {acc}')
 
                     # end of calculate accuracy of each class and total
 
@@ -564,7 +591,8 @@ class Model:
 
                 # total accuracy
                 total_acc /= len(self.classes)
-                self.log.writeline(f'Total acc: {total_acc}\n', debug_ok=False)
+                self.log.writeline(f'Total acc: {total_acc}\n')
+                self.rate.write(f', {total_acc}')
 
                 # for tqdm
                 print(f'  Total acc: {total_acc}\n')
@@ -576,6 +604,12 @@ class Model:
         # knwon test
         if self.known_loader is not None:
             _inner_execute(self.known_loader, 'known')
+        else:
+            # spacing
+            # self.rate.write(' ' * 15)
+            self.rate.write(', -' * len(self.classes))
+
+        self.rate.writeline()
     # end of [function] test
 
     def _build_model(self):
@@ -586,25 +620,14 @@ class Model:
             criterion: `CrossEntropyLoss`
         """
 
-        self.net = cnn.Net(input_size=self.input_size)  # network
-        self.optimizer = optim.Adam(self.net.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
+        self.net = cnn.Net(self.input_size, self.tms.channels)  # network
+        self.optimizer = optim.Adam(
+            self.net.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
         self.criterion = nn.CrossEntropyLoss()
 
         self.net.zero_grad()  # init all gradient
         self.net.to(self.device)  # switch to GPU / CPU
     # end of [function] _build_model
-
-    def _write_classes(self):
-        r"""Writing classes of dataset."""
-        path = Path(self.tms.config_path, 'classes.txt')
-        file_ = ul.LogFile(path, std_debug_ok=False, clear=True)
-
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        for k, _cls in self.classes.items():
-            file_.writeline(f'{k}:{_cls}')
-        file_.close()
-    # end of [function] _write_classes
 
     def _load_model(self, path: str):
         r"""Load model.
@@ -613,8 +636,7 @@ class Model:
             path (str): pth path.
         """
         # not exists -> raise
-        if not os.path.exists(path):
-            ul.raise_when_FileNotFound(path)
+        ul.raise_when_FileNotFound(path)
 
         # load checkpoint
         checkpoint = torch.load(path)
@@ -625,16 +647,14 @@ class Model:
 
         # key is exists, load value and it assign to variable.
         # key is not exists, initialize value and it assign to variable.
-        self.optimizer = checkpoint.pop('optimizer_state_dict', None)
-        self.current_epoch = checkpoint('epoch', None)
+        self.optimizer = checkpoint.pop(
+            'optimizer_state_dict', optim.Adam(self.net.parameters()))
+        self.current_epoch = checkpoint('epoch', 0)
 
-        if self.optimizer is not None:
-            self.optimizer = optim.Adam(self.net.parameters())
+        self.criterion = nn.CrossEntropyLoss()
+    # end of [function] _load_model
 
-        if self.current_epoch is not None:
-            self.current_epoch = 0
-
-    def save_model(self, path: str, **options):
+    def save_model(self, path: str, optimizer=False, epoch=False):
         r"""Save Model.
 
         Args:
@@ -648,17 +668,26 @@ class Model:
             'model_state_dict': self.net.state_dict(),
         }
 
-        optimizer = options.pop('optimizer_state_dict', False)
-        epoch = options.pop('epoch', False)
-
+        # options (for re-training)
         if optimizer:
-            save_config['optimizer'] = self.optimizer.state_dict()
-
+            save_config['optimizer_state_dict'] = self.optimizer.state_dict()
         if epoch:
             save_config['epoch'] = self.current_epoch
 
         torch.save(save_config, path)
     # end of [function] save_model
+
+    def _write_classes(self):
+        r"""Writing classes of dataset."""
+        path = Path(self.tms.config_path, 'classes.txt')
+        file_ = ul.LogFile(path, std_debug_ok=False, clear=True)
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        for k, _cls in self.classes.items():
+            file_.writeline(f'{k}:{_cls}')
+        file_.close()
+    # end of [function] _write_classes
 
     def _create_schedule(self, cycle: int) -> List[bool]:
         r"""Returns exec schedule of cycle.
@@ -790,3 +819,48 @@ def calc_confusion_matrix(correct_labels: Union[Tensor, np.ndarray],
 
     return cm
 # end of [function] calc_confusion_matrix
+
+
+def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
+    """Returns mean and std."""
+    CHANNEL_NUM = channels
+
+    # xp: Union[np, cupy] = cupy if torch.cuda.is_available() else np
+    xp: np = np
+
+    pixel_num = 0  # store all pixel number in the dataset
+    channel_sum = xp.zeros(CHANNEL_NUM)
+    channel_sum_squared = xp.zeros(CHANNEL_NUM)
+
+    for key, data_list in dataset.all_list.items():
+        if key == 'known':
+            continue
+
+        # for i, data in enumerate(data_list):
+        for data in data_list:
+            # print(f'\r{i}: {data.path}', end='')
+            # img = cv2.imread(data.path)
+            # img = cv2.resize(img, (60, 60))
+            img_pil = Image.open(data.path).resize((60, 60))
+
+            img = xp.asarray(img_pil)
+            img = img / 255
+            pixel_num += (img.size / CHANNEL_NUM)
+            channel_sum += xp.sum(img, axis=(0, 1))
+            channel_sum_squared += xp.sum(xp.square(img), axis=(0, 1))
+
+    bgr_mean = channel_sum / pixel_num
+    bgr_std = xp.sqrt(channel_sum_squared / pixel_num - xp.square(bgr_mean))
+
+    # change the format from bgr to rgb
+    rgb_mean = list(bgr_mean)[::-1]
+    rgb_std = list(bgr_std)[::-1]
+
+    return tuple(rgb_mean), tuple(rgb_std)
+
+
+def make_grid_and_plot(imgs: Tensor) -> None:
+    imgs = torchvision.utils.make_grid(imgs)
+    imgs = imgs / 2 + 0.5
+    np_imgs = imgs.cpu().numpy()
+    plt.imshow(np.transpose(np_imgs, (1, 2, 0)))

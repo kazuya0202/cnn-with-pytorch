@@ -4,7 +4,7 @@ from torch import Tensor
 
 
 class Net(nn.Module):
-    def __init__(self, input_size: tuple) -> None:
+    def __init__(self, input_size: tuple, in_channels: int = 3) -> None:
         super(Net, self).__init__()
 
         hei_ = input_size[0] // 4
@@ -14,7 +14,7 @@ class Net(nn.Module):
         # nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding)
         # nn.BatchNorm2d(num_features)
 
-        self.conv1 = nn.Conv2d(3, 96, kernel_size=7, stride=1, padding=3)
+        self.conv1 = nn.Conv2d(in_channels, 96, kernel_size=7, stride=1, padding=3)
         self.bn1 = nn.BatchNorm2d(96)
         self.conv2 = nn.Conv2d(96, 128, kernel_size=5, stride=1, padding=2)
         self.bn2 = nn.BatchNorm2d(128)

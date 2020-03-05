@@ -22,12 +22,12 @@
 
 ## Usage
 
-1. `user-settings.toml`を編集する [^1]
+1. `user-settings.toml`を編集する `Notes: 1`
 
    + データセットのパス
    + エポック数　...
 
-2. スクリプトを実行する [^2]
+2. スクリプトを実行する `Notes: 2`
 
    ```sh
    $ python main.py
@@ -37,7 +37,7 @@
 
 ## Notes
 
-[^1]: `user-settings.toml`の記述が正しくない場合、以下のようなエラーが出る。
+1. `user-settings.toml`の記述が正しくない場合、以下のようなエラーが出る。
 
 <details><summary>クリックして展開</summary>
 
@@ -71,4 +71,6 @@ toml.decoder.TomlDecodeError: invalid literal for int() with base 0: 'tru' (line
 
 </details>
 
-[^2]: GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_settings.toml`の`subdivision`の値を増やす。
+<br>
+
+2. GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_settings.toml`の`subdivision`の値を増やす。

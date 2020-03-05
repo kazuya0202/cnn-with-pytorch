@@ -94,7 +94,7 @@ def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor,
         alpha = gcam[..., None]
         gcam = alpha * cmap + (torch.tensor(1) - alpha) * raw_image
     else:
-        gcam = (cmap.astype(np.float) + raw_image.to(np.float)) / 2
+        gcam = (cmap.astype(np.float) + raw_image.clone().cpu().numpy().astype(np.float)) / 2
 
     gcam = np.uint8(gcam)
     return gcam
@@ -126,18 +126,10 @@ class ExecuteGradCAM:
         self.is_grad_cam = options.pop('is_grad_cam', False)
 
         self.class_num = len(classes)
-
-        self.processed_data = {
-            'vanilla': [],
-            'deconv': [],
-            'gbp': [],
-            'gcam': [],
-            'ggcam': [],
-        }
     # end of [function] __init__
 
     @torch.enable_grad()  # enable gradient
-    def main(self, model: cnn.Net, image_path: Union[list, str]) -> dict:
+    def main(self, model: cnn.Net, image_path: Union[tuple, list, str]) -> dict:
         """Switch execute function.
 
         Args:
@@ -150,29 +142,49 @@ class ExecuteGradCAM:
 
         model.eval()  # switch to eval
 
+        restore_device = next(model.parameters()).device
+        model.to(torch.device('cpu'))  # use only cpu
+
+        ret = {}
+
+        # convert to list
+        if isinstance(image_path, tuple):
+            image_path = list(image_path)
+
         # process one image.
         if isinstance(image_path, str):
-            self._execute_one_image(model, image_path)
+            ret = self._execute_one_image(model, image_path)
 
         # process multi images.
         elif isinstance(image_path, list):
-            self._execute_multi_images(model, image_path)
+            ret = self._execute_multi_images(model, image_path)
 
-        return self.processed_data
+        model.to(restore_device)
+        return ret
     # end of [function] main
 
-    def _execute_one_image(self, model: cnn.Net, image_path: str) -> None:
+    def _execute_one_image(self, model: cnn.Net, image_path: str) -> dict:
         """Process one image.
 
         Args:
             model (cnn.Net): model.
             image_path (str): path of image.
         """
+        processed_data = {
+            'vanilla': [],  # Vanilla
+            'deconv': [],  # Deconv Net
+            'gbp': [],  # Guided Back Propagation
+            'gcam': [],  # Grad-CAM
+            'ggcam': [],  # Guided Grad-CAM
+        }
 
-        device = next(model.parameters()).device  # get device
+        # device = next(model.parameters()).device  # get device
+        device = torch.device('cpu')  # cpu only
 
         image, raw_image = preprocess(image_path, self.input_size)
         image = image.unsqueeze_(0).to(device)
+        raw_image = torch.from_numpy(raw_image)
+        raw_image = raw_image.unsqueeze_(0).to(device)
 
         # --- Vanilla Backpropagation ---
         bp = BackPropagation(model=model)
@@ -207,7 +219,7 @@ class ExecuteGradCAM:
 
                 # append
                 data = get_data_of_gradient(gradients)
-                self.processed_data['vanilla'].append(data)
+                processed_data['vanilla'].append(data)
 
             if self.is_deconv:
                 deconv.backward(ids=ids[:, [i]])
@@ -215,7 +227,7 @@ class ExecuteGradCAM:
 
                 # append
                 data = get_data_of_gradient(gradients)
-                self.processed_data['deconv'].append(data)
+                processed_data['deconv'].append(data)
 
             # Grad-CAM / Guided Grad-CAM / Guided Backpropagation
             if self.is_grad_cam:
@@ -227,14 +239,14 @@ class ExecuteGradCAM:
                 regions = gcam.generate(target_layer=self.target_layer)
 
                 # append
-                data = get_data_of_gradient(gradients)
-                self.processed_data['gbp'].append(data)
+                data = get_data_of_gradient(gradients[0])
+                processed_data['gbp'].append(data)
 
-                data = get_data_of_grad_cam(regions[0], raw_image)
-                self.processed_data['gcam'].append(data)
+                data = get_data_of_grad_cam(regions[0, 0], raw_image[0])
+                processed_data['gcam'].append(data)
 
-                data = get_data_of_gradient(torch.mul(regions, gradients))
-                self.processed_data['ggcam'].append(data)
+                data = get_data_of_gradient(torch.mul(regions, gradients)[0])
+                processed_data['ggcam'].append(data)
 
         # Remove all the hook function in the 'model'
         bp.remove_hook()
@@ -245,17 +257,27 @@ class ExecuteGradCAM:
         if self.is_grad_cam:
             gcam.remove_hook()
             gbp.remove_hook()
+
+        return processed_data
     # end of [function] _execute_one_image
 
-    def _execute_multi_images(self, model: cnn.Net, image_paths: List[str]) -> None:
+    def _execute_multi_images(self, model: cnn.Net, image_paths: List[str]) -> dict:
         r"""Process multiple images.
 
         Args:
             model (cnn.Net): model.
             image_paths (List[str]): path of images.
         """
+        processed_data = {
+            'vanilla': [],  # Vanilla
+            'deconv': [],  # Deconv Net
+            'gbp': [],  # Guided Back Propagation
+            'gcam': [],  # Grad-CAM
+            'ggcam': [],  # Guided Grad-CAM
+        }
 
-        device = next(model.parameters()).device  # get device
+        # device = next(model.parameters()).device  # get device
+        device = torch.device('cpu')  # only cpu
 
         images, raw_images = load_images(image_paths, self.input_size)
         images = torch.stack(images).to(device)
@@ -295,7 +317,7 @@ class ExecuteGradCAM:
                 for j in range(len(images)):
                     # append
                     data = get_data_of_gradient(gradients[j])
-                    self.processed_data['vanilla'].append(data)
+                    processed_data['vanilla'].append(data)
 
             if self.is_deconv:
                 deconv.backward(ids=ids[:, [i]])
@@ -304,7 +326,7 @@ class ExecuteGradCAM:
                 for j in range(len(images)):
                     # append
                     data = get_data_of_gradient(gradients[j])
-                    self.processed_data['deconv'].append(data)
+                    processed_data['deconv'].append(data)
 
             # Grad-CAM / Guided Grad-CAM / Guided Backpropagation
             if self.is_grad_cam:
@@ -318,13 +340,13 @@ class ExecuteGradCAM:
                 for j in range(len(images)):
                     # append
                     data = get_data_of_gradient(gradients[j])
-                    self.processed_data['gbp'].append(data)
+                    processed_data['gbp'].append(data)
 
                     data = get_data_of_grad_cam(regions[j, 0], raw_images[j])
-                    self.processed_data['gcam'].append(data)
+                    processed_data['gcam'].append(data)
 
                     data = get_data_of_gradient(torch.mul(regions, gradients)[j])
-                    self.processed_data['ggcam'].append(data)
+                    processed_data['ggcam'].append(data)
 
         # Remove all the hook function in the 'model'
         bp.remove_hook()
@@ -335,5 +357,7 @@ class ExecuteGradCAM:
         if self.is_grad_cam:
             gcam.remove_hook()
             gbp.remove_hook()
+
+        return processed_data
     # end of [function] _execute_multi_images
 # end of [class] ExecuteGradCAM

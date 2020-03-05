@@ -3,6 +3,7 @@ import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 import torch
 import torch.nn as nn
@@ -32,7 +33,9 @@ class PredictedResult:
 
 @dataclass(init=False)
 class ValidModel:
-    def __init__(self, load_pth_path: str, use_gpu: bool = True,
+    """Validation model."""
+
+    def __init__(self, load_pth_path: str, use_gpu: bool = True, in_channels: int = 3,
                  input_size: tuple = (60, 60), transform: transforms = None) -> None:
         r"""
         Args:
@@ -49,6 +52,7 @@ class ValidModel:
         self.device = torch.device('cuda' if use_gpu else 'cpu')
 
         self.input_size = input_size
+        self.in_channels = in_channels
 
         # load model
         self._load_model(load_pth_path)
@@ -57,7 +61,9 @@ class ValidModel:
             # transform
             transform = transforms.Compose([
                 transforms.Resize(self.input_size),
-                transforms.ToTensor()])
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ])
 
         self.transform = transform
     # end of [function] __init__
@@ -78,12 +84,7 @@ class ValidModel:
             err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), pth_path)
             raise FileNotFoundError(err)
 
-        self.net = cnn.Net(input_size=self.input_size)  # network
-
-        # self.optimizer = optim.SGD(self.net.parameters(), lr=0.01)
-        self.optimizer = optim.Adam(
-            self.net.parameters(), lr=0.001, betas=(0.9, 0.999), eps=pow(10, -8))
-        self.criterion = nn.CrossEntropyLoss()
+        self.net = cnn.Net(self.input_size, self.in_channels)  # network
 
         # load checkpoint
         checkpoint = torch.load(pth_path)
@@ -92,14 +93,16 @@ class ValidModel:
         self.classes = checkpoint['classes']
         self.net.load_state_dict(checkpoint['model_state_dict'])
 
-        # self.current_epoch = checkpoint['epoch']
-        # criterion = checkpoint['criterion']
-        # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-
         self.net.to(self.device)  # switch to GPU / CPU
         self.net.eval()  # switch to eval
 
-    def valid(self, image_path: str) -> 'PredictedResult':
+    def valid_multi_images(self, image_path_list: list) -> Iterator[PredictedResult]:
+        # generator
+        for path in image_path_list:
+            yield self.valid(path)
+    # end of [function] multi_valid
+
+    def valid(self, image_path: str) -> PredictedResult:
         r"""Validing model by single image.
 
         Args:
@@ -158,7 +161,7 @@ if __name__ == '__main__':
     pth_path = r'D:\workspace\repos\github.com\kazuya0202\cnn-with-pytorch\recognition_datasets\0_2020Feb10_21h48m40s_final.pth'
     use_gpu = True
 
-    vm = ValidModel(pth_path, use_gpu)
+    vm = ValidModel(pth_path, use_gpu, in_channels=3)
 
     # ===== example =====
     # 1枚

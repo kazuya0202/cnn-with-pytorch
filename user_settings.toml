@@ -3,7 +3,7 @@
 # default_settings.toml の設定を上書きする
 # ※ 変数名は変更しない
 
-[util_path]
+[common]
 # 間違えた画像の保存先
 false_path = './recognition_datasets/False/'
 
@@ -12,6 +12,13 @@ pth_save_path = './recognition_datasets/'
 
 # 使用画像、クラスの出力先
 config_path = './config/'
+
+# 学習を再開させるかどうか
+is_load_model = false
+
+# 再開するモデルのパス (`is_load_model` = true のときのみ)
+# ※ 再学習には [network] > `is_available_re_training` を true にしたモデルを指定する必要がある
+load_pth_path = './model.pth'
 
 [dataset]
 # データセットのパス(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
@@ -29,8 +36,8 @@ dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\
     #    └─ ...
     # ====================================== #
 
-# データセットの最大枚数(0 は上限なし)
-limit_dataset_size = 0
+# データセットの最大枚数(-1 は上限なし)
+limit_dataset_size = -1
 
 # 各データセットのテスト比率(枚数) ↓どちらか一方を使う
 test_size = 0.1  # 比率: (0.0 ~ 1.0) type[float]
@@ -38,6 +45,12 @@ test_size = 0.1  # 比率: (0.0 ~ 1.0) type[float]
 
 # 対象の拡張子
 extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
+
+# 入力チャネル
+channels = 3
+    # カラー画像(RGB)    -> 3
+    # グレースケール画像 -> 1
+    # ...
 
 [network]
 # 入力サイズ
@@ -65,6 +78,10 @@ is_shuffle_per_epoch = true
 
 # 最終モデルを保存するか
 is_save_final_pth = true
+
+# 保存するモデルを再学習可能な状態にするかどうか
+# true にする場合、モデルのサイズが大きくなるため注意（1GB以上）
+is_available_re_training = false
 
 [log]
 # ログ(学習状況)の出力先

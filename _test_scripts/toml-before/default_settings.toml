@@ -1,75 +1,78 @@
 [util_path]
-# false - save mistaking images
+# false - save mistaking images.
 false_path = './Recognition/False/'
 
-# path - save trained model
+# path - save trained model.
 pth_save_path = './Recognition/'
 
-# config - save config of dataset
+# config - save config of dataset.
 config_path = './config/'
 
 [dataset]
-# image - target dataset
+# image - target dataset.
 dataset_path = './Recognition/Images/'
 
-# max dataset size
+# max dataset size.
 limit_dataset_size = 0
 
-# testing size
+# testing size.
 test_size = 0.1  # rate
 # test_size = 400  # number
 
-# supported extensions
+# supported extensions.
 extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
 
+# chanenls of dataset images.
+channels = 3
+
 [network]
-# input size to network
+# input size to network.
 height = 60
 width = 60
 
-# epoch times
+# epoch times.
 epoch = 10
 
-# image size in one batch
+# image size in one batch.
 batch = 128
 
-# subdivision of batch
+# subdivision of batch.
 subdivision = 4
 
-# testing cycle
+# testing cycle.
 test_cycle = 1
 
-# saving pth cycle
+# saving pth cycle.
 pth_save_cycle = 0
 
-# using gpu
+# using gpu.
 use_gpu = true
 
-# shuffle images per epoch
+# shuffle images per epoch.
 is_shuffle_per_epoch = true
 
-# save final pth
+# save final pth.
 is_save_final_pth = true
 
 [log]
-# log - save logging
+# log - save logging.
 log_path = './Recognition/Logs/'
 
-# debug log
+# debug log.
 is_save_debug_log = true
 
-# rate log
+# rate log.
 is_save_rate_log = true
 
-# network definition
+# network definition.
 is_show_network_difinition = true
 
 [gradcam]
-# save path of grad cam images
+# save path of grad cam images.
 grad_cam_path = './Recognition/grad_cam_results/'
 
-# use grad cam
+# use grad cam.
 is_grad_cam = true
 
-# visualize layer
+# visualize layer.
 grad_cam_layer = 'conv5'
