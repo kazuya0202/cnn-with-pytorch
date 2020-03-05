@@ -4,8 +4,20 @@ from torch import Tensor
 
 
 class Net(nn.Module):
-    def __init__(self, input_size: tuple, classify_size: int, in_channels: int = 3) -> None:
+    # def __init__(self, input_size: tuple, classify_size: int, in_channels: int = 3) -> None:
+    def __init__(self, **options) -> None:
+        r"""
+        **options
+            input_size (tuple): Defaults to (60, 60).
+            classify_size (int): Defaults to 3.
+            in_channels (int): Defaults to 3.
+        """
         super(Net, self).__init__()
+
+        # options
+        input_size: tuple = options.pop('input_size', (60, 60))
+        classify_size: int = options.pop('classify_size', 3)
+        in_channels: int = options.pop('in_channels', 3)
 
         hei_ = input_size[0] // 4  # `4` depends on max_pool2d.
         wid_ = input_size[1] // 4

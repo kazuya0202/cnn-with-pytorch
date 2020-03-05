@@ -129,7 +129,11 @@ def main() -> int:
             tms.pth_save_path, tms.filename_base, end='_final', ext='pth')
 
         progress = ul.ProgressLog(f'Saving model to \'{save_path}\'')
-        model.save_model(save_path)  # save
+
+        save_option = [True, True] if tms.is_available_re_training \
+            else [False, False]
+        model.save_model(save_path, save_option)  # save
+
         progress.complete()
 
         log.writeline(f'# Saved model to \'{save_path}\'', debug_ok=False)
@@ -183,6 +187,7 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset,
         'criterion': str(model.criterion),
         'input size': f'(h: {tms.height}, w: {tms.width})',
         'epoch': tms.epoch,
+        'batch size': tms.batch,
         'subdivision': tms.subdivision,
         'GPU available': torch.cuda.is_available(),
         'GPU used': tms.use_gpu and torch.cuda.is_available(),

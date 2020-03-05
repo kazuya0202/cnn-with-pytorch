@@ -1,5 +1,4 @@
 import itertools
-import os
 import random
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -28,6 +27,9 @@ import cnn
 import toml_settings as _tms
 import utils as ul
 from grad_cam import ExecuteGradCAM
+
+# quote package
+from radam_optim import radam
 
 
 @dataclass
@@ -247,6 +249,11 @@ class Model:
         self.unknown_loader: DataLoader = loader.pop('unknown', None)
         self.known_loader: DataLoader = loader.pop('known', None)
 
+        _optim_t = Union[optim.Adam, radam.RAdam, optim.SGD]
+        self.net: cnn.Net
+        self.optimizer: _optim_t
+        self.criterion: nn.CrossEntropyLoss
+
         self.tms = tms  # toml settings
         self.max_epoch = tms.epoch
 
@@ -262,13 +269,17 @@ class Model:
 
         self.classes: Dict[int, str] = classes
         self.classify_size: int = len(classes)
-        self.input_size = tms.input_size  # image size when input to network
 
         # tensorboard
         self.writer = tbx.SummaryWriter()
 
+        # Grad-CAM setting
+        self.egc = ExecuteGradCAM(list(self.classes.values()), tms.input_size,
+                                  tms.grad_cam_layer, is_grad_cam=True)
+
         # -----
 
+        # re-training
         if tms.is_load_model:
             self._load_model(tms.load_pth_path)
             self.max_epoch -= self.current_epoch  # 0 ~ (max_epoch-current_epoch) times.
@@ -285,13 +296,6 @@ class Model:
         if self.tms.pth_save_cycle != 0:
             self.pth_save_path = f'{self.tms.pth_save_path}/{self.tms.filename_base}'
             ul.make_directories(self.pth_save_path)
-
-        # Grad-CAM setting
-        self.egc = ExecuteGradCAM(
-            list(self.classes.values()),
-            tms.input_size,
-            tms.grad_cam_layer,
-            is_grad_cam=True)
 
     # end of [function] __init__
 
@@ -312,9 +316,8 @@ class Model:
         plot_point = 0  # for tensorboard
 
         # [optimizer, epoch]
-        save_option = [False, False]
-        if self.tms.is_available_re_training:
-            save_option = [True, True]
+        save_option = [True, True] if self.tms.is_available_re_training \
+            else [False, False]
 
         # loop epoch
         for epoch in range(self.max_epoch):
@@ -611,14 +614,21 @@ class Model:
         r"""Building model.
 
         using ...
-            optimizer: `Adam`
+            optimizer: `RAdam`
             criterion: `CrossEntropyLoss`
         """
         # network
-        self.net = cnn.Net(self.input_size, self.classify_size,
-                           in_channels=self.tms.channels)
-        self.optimizer = optim.Adam(
-            self.net.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
+        params = dict(input_size=self.tms.input_size,
+                      classify_size=self.classify_size, in_channels=self.tms.channels)
+        self.net = cnn.Net(**params)
+
+        options = dict(lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
+        # self.optimizer = optim.Adam(self.net.parameters(), **options)  # Adam
+        self.optimizer = radam.RAdam(self.net.parameters(), **options)  # RAdam
+        # self.optimizer = optim.RAdam(self.net.parameters(), **options)  # `optim.RAdam` is unimplemented (2020/03/05).
+
+        # self.optimizer = optim.SGD(self.net.parameters(), lr=1e-2)
+
         self.criterion = nn.CrossEntropyLoss()
 
         self.net.zero_grad()  # init all gradient

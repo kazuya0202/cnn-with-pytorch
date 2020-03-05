@@ -22,8 +22,8 @@ load_pth_path = './model.pth'
 
 [dataset]
 # データセットのパス(各クラスごとにフォルダにまとめて、そのフォルダをまとめたパスを指定)
-dataset_path = './recognition_datasets/Images/'
-# dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+# dataset_path = './recognition_datasets/Images/'
+dataset_path = 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
 # dataset_path = 'C:\ichiya\prcn2019\prcn2019-datasets\datasets\Images-20191014'
     # ====================================== #
     #  Images/                <- ここを指定
@@ -44,7 +44,8 @@ test_size = 0.1  # 比率: (0.0 ~ 1.0) type[float]
 # test_size = 400  # 枚数: (1 ~ N)  type[int]
 
 # 対象の拡張子
-extensions = ['jpg', 'png', 'jpeg', 'bmp', 'gif']
+extensions = ['jpg', 'png', 'jpeg']
+    # bmp / gif / tiff / tif ...
 
 # 入力チャネル
 channels = 3
@@ -61,7 +62,7 @@ width = 60
 epoch = 3
 
 # 1バッチの画像枚数(何枚ずつ行うか)
-batch = 16
+batch = 128
 
 # バッチの細分化
 subdivision = 4
@@ -105,3 +106,7 @@ is_grad_cam = true
 
 # 可視化するレイヤー
 grad_cam_layer = 'conv5'
+
+# [xxx]
+# optimizer = 'RAdam'
+# # Adam / RAdam / SGD

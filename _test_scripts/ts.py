@@ -1,19 +1,9 @@
-def xx(**options):
-    a = options.pop('a', False)
-    b = options.pop('b', False)
 
-    save_config = {
-        'x': 1,
-        'y': 2,
-    }
-    if a:
-        save_config['optimizer'] = 3
-
-    if b:
-        save_config['epoch'] = 4
-
-    print(save_config)
+def xx(a=False, b=False):
+    print(a, b)
 
 
 if __name__ == "__main__":
-    xx(a=True, b=False)
+    # xx(a=True, b=False)
+    s = True if False else False
+    xx(*(s * 2))

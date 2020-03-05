@@ -6,8 +6,6 @@ from pathlib import Path
 from typing import Iterator
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import torchvision.transforms as transforms
 from PIL import Image
 
@@ -85,7 +83,10 @@ class ValidModel:
             err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), pth_path)
             raise FileNotFoundError(err)
 
-        self.net = cnn.Net(self.input_size, self.in_channels)  # network
+        # network
+        self.net = cnn.Net(
+            input_size=self.input_size,
+            in_channels=self.in_channels)
 
         # load checkpoint
         checkpoint = torch.load(pth_path)
@@ -173,10 +174,10 @@ if __name__ == '__main__':
     exit()
 
     # 複数枚
-    train_images_path = './config/train_used_images.txt'
+    train_images_path = './config/unknown_used_images.txt'
     image_list = open(train_images_path).readlines()
 
-    random.shuffle(image_list)
+    random.shuffle(image_list)  # シャッフル
 
     print('%s%s%s%s' % ('label'.center(10), 'class name'.center(15), 'acc rate'.center(8), ' path'))
     for img_path in image_list:

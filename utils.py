@@ -9,8 +9,7 @@ import numpy as np
 @dataclass(init=False)
 class LogFile:
     def __init__(self, path: Optional[Union[str, Path]],
-                 std_debug_ok: bool = True,
-                 clear: bool = False) -> None:
+                 std_debug_ok: bool = True, clear: bool = False) -> None:
 
         self.std_debug_ok = std_debug_ok
         self._is_write = True
