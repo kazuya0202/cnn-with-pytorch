@@ -6,8 +6,11 @@ from pathlib import Path
 from typing import Iterator
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import Image
+from torch import Tensor
 
 # my package
 import cnn
@@ -51,10 +54,10 @@ class ValidModel:
 
         self.input_size = input_size
         self.in_channels = in_channels
+        self.classify_size: int
 
         # load model
         self._load_model(load_pth_path)
-        self.classify_size = len(self.classes)
 
         if transform is None:
             # transform
@@ -68,8 +71,6 @@ class ValidModel:
     # end of [function] __init__
 
     def _load_model(self, pth_path: str):
-        # TODO: overwrite this by tu.Model.
-
         """Loading model.
 
         Args:
@@ -83,16 +84,17 @@ class ValidModel:
             err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), pth_path)
             raise FileNotFoundError(err)
 
-        # network
-        self.net = cnn.Net(
-            input_size=self.input_size,
-            in_channels=self.in_channels)
-
         # load checkpoint
         checkpoint = torch.load(pth_path)
 
         # classes, network
         self.classes = checkpoint['classes']
+        self.classify_size = len(self.classes)
+
+        # network
+        options = dict(input_size=self.input_size, classify_size=self.classify_size,
+                       in_channels=self.in_channels)
+        self.net = cnn.Net(**options)
         self.net.load_state_dict(checkpoint['model_state_dict'])
 
         self.net.to(self.device)  # switch to GPU / CPU
@@ -110,28 +112,29 @@ class ValidModel:
         Args:
             image_path (str): image path to valid.
 
-        Raises:
-            FileNotFoundError: is occured if image path is not exist.
-
         Returns:
             PredictedData: result of predicted.
         """
         # path is not exist -> PredictedData default value
         if not os.path.exists(image_path):
-            # raise FileNotFoundError
             return PredictedResult()
 
-        # get image as tensor
-        img = self.preprocess(image_path)
+        with torch.no_grad():
+            # get image as tensor
+            img = self.preprocess(image_path)
 
-        # input to model
-        x = self.net(img)
-        pred = torch.max(x.data, 1)[1].cpu().numpy()
-        label = pred[0]
+            # input to model
+            x: Tensor = self.net(img)
+            # pred = torch.max(x.data, 1)[1].cpu().numpy()
 
-        name = self.classes[label]
+            x_sm = F.softmax(x, -1)
+            pred = torch.max(x_sm.data, 1)
 
-        return PredictedResult(label, name)
+            label = int(pred[1].item())  # label num
+            name = self.classes[label]  # class name
+            acc_rate = float(pred[0].item())  # accuracy score (#beta)
+
+        return PredictedResult(label, name, acc_rate)
     # end of [function] valid
 
     def preprocess(self, image_path: str) -> torch.Tensor:
@@ -167,7 +170,13 @@ if __name__ == '__main__':
 
     # ===== example =====
     # 1枚
-    img_path = './recognition_datasets/Images/crossing/crossing-samp1_3_4.jpg'
+    img_path = './recognition_datasets/Images/crossing/crossing-samp1_0_1.jpg'
+    result = vm.valid(img_path)
+    print(result)
+    img_path = './recognition_datasets/Images/klaxon/_-4CBPouKVazs_10_1.jpg'
+    result = vm.valid(img_path)
+    print(result)
+    img_path = './recognition_datasets/Images/noise/noise_100_2.jpg'
     result = vm.valid(img_path)
     print(result)
 

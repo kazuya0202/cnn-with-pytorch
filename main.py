@@ -3,11 +3,20 @@ from typing import Any, Dict
 
 import torch
 import torchvision.transforms as transforms
+from argparse import ArgumentParser, Namespace
 
 # my packages
 import toml_settings as _tms
 import torch_utils as tu
 import utils as ul
+
+
+def parse_argument() -> Namespace:
+    parser = ArgumentParser()
+    parser.add_argument('-p', '--path', help='path of `user_settings.toml`.', default=None)
+
+    return parser.parse_args()
+# end of [function] parse_argument
 
 
 def main() -> int:
@@ -19,7 +28,12 @@ def main() -> int:
     Returns:
         int: exit status.
     """
-    tms = _tms.factory()
+    args = parse_argument()
+    toml_path = args.path
+    if toml_path is not None:
+        print(f'Set `toml_path` to {toml_path}')
+    tms = _tms.factory(toml_path)
+    exit()
 
     """ DEBUG NOW """
     tms.is_save_debug_log = False

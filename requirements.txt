@@ -6,3 +6,4 @@ scikit-learn
 tqdm
 matplotlib
 opencv-python
+tensorflow

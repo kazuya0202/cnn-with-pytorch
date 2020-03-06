@@ -17,7 +17,7 @@ def factory(toml_path=None) -> 'TomlSettings':
         else user_settings_path
 
     if not os.path.exists(toml_path):
-        print(f'Don\'t load user toml.(the \'{toml_path}\' is not exist.\n)')
+        print(f'Don\'t load user toml. (The \'{toml_path}\' is not exist.)\n')
         return tms
 
     toml_ = toml.load(toml_path)  # load

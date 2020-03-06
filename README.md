@@ -1,12 +1,20 @@
 # CNN implemented PyTorch with Grad-CAM
 
+|       Script       |   Description    |
+| :----------------: | :--------------: |
+|      main.py       |     学習全般     |
+| user_settings.toml |   ユーザー設定   |
+|     _valid.py      | 学習モデルの検証 |
+
+<br>
+
 ## Requirements
 
 + `pip` モジュール
 
   1. PyTorch
 
-     [PyTorch インストール方法]() 参照。
+     [PyTorch インストール方法（書き次第リンク貼る）]() 参照。
 
   2. その他モジュール
 
@@ -16,30 +24,42 @@
 
 + CUDA / cuDNN
 
-  [【Windows】CUDA / cuDNN インストール]() 参照。
+  [【Windows】CUDA-cuDNN インストール](https://ichiya.netlify.com/posts/2020/02/29/_20200229.html) 参照。
 
 <br>
 
 ## Usage
 
-1. `user-settings.toml`を編集する `Notes: 1`
+`user_settings.toml`は`main.py`と同じディレクトリに置く。
 
-   + データセットのパス
-   + エポック数　...
+もしくは、実行時にパスを指定する。
+
+---
+
+1. *[user_settings.toml](https://github.com/kazuya0202/cnn-with-pytorch/blob/master/user_settings.toml)* を編集する `Notes: 1`
+
+   ※ 変数名は変更しない。
 
 2. スクリプトを実行する `Notes: 2`
 
+   + `user_settings.toml`が同じディレクトリにない場合は、`--path`オプションで直接指定する。
+   
    ```sh
    $ python main.py
+   # or
+   $ python main.py --path <toml path>
    ```
 
 <br>
 
 ## Notes
 
-1. `user-settings.toml`の記述が正しくない場合、以下のようなエラーが出る。
+### 【1】
 
-<details><summary>クリックして展開</summary>
++ `user-settings.toml`の記述が正しくない場合、以下のようなエラーが出る。
+
+<details><summary>出力例（クリックして展開）</summary>
+
 
 ```sh
 $ python main.py
@@ -73,4 +93,10 @@ toml.decoder.TomlDecodeError: invalid literal for int() with base 0: 'tru' (line
 
 <br>
 
-2. GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_settings.toml`の`subdivision`の値を増やす。
+### 【2】
+
++ GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_settings.toml`の`subdivision`の値を増やす。
++ テスト時に間違えた画像のみ**Grad-CAM**を行う。
++ クラス分類は、自動で定義される。
+  + `[dataset] > dataset_path`の子ディレクトリをクラスとして扱う。
+
