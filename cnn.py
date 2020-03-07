@@ -15,9 +15,9 @@ class Net(nn.Module):
         super(Net, self).__init__()
 
         # options
-        input_size: tuple = options.pop('input_size', (60, 60))
-        classify_size: int = options.pop('classify_size', 3)
-        in_channels: int = options.pop('in_channels', 3)
+        input_size: tuple = options.pop("input_size", (60, 60))
+        classify_size: int = options.pop("classify_size", 3)
+        in_channels: int = options.pop("in_channels", 3)
 
         hei_ = input_size[0] // 4  # `4` depends on max_pool2d.
         wid_ = input_size[1] // 4
@@ -36,7 +36,6 @@ class Net(nn.Module):
         self.fc6 = nn.Linear((256 * hei_ * wid_), 2048)
         self.fc7 = nn.Linear(2048, 512)
         self.fc8 = nn.Linear(512, classify_size)
-    # end of [function] __init__
 
     def forward(self, x) -> Tensor:
         x = F.relu(self.conv1(x))
@@ -58,8 +57,6 @@ class Net(nn.Module):
         # x = F.softmax(x)
 
         return x
-    # end of [function] forward
-# end of [class] Net
 
 
 def num_flat_features(x) -> int:
@@ -68,4 +65,3 @@ def num_flat_features(x) -> int:
     for s in size:
         num_features *= s
     return num_features
-# end of [function] num_flat_features

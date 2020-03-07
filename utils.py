@@ -3,95 +3,92 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Union
-import numpy as np
 
 
-@dataclass(init=False)
+# type annotation
+_path_t = Union[str, Path]
+
+
+@dataclass
 class LogFile:
-    def __init__(self, path: Optional[Union[str, Path]],
-                 std_debug_ok: bool = True, clear: bool = False) -> None:
+    path: Optional[_path_t] = None
+    std_debug_ok: bool = True
+    _clear: bool = False
 
-        self.std_debug_ok = std_debug_ok
-        self._is_write = True
+    def __post_init__(self):
+        self._std_debug_ok = self.std_debug_ok
 
-        if path is None:
-            self.path = path
+        if self.path is None:
             self._is_write = False
             return
 
-        self.path = Path(path)
+        self._path = Path(self.path)
+        self._is_write = True
 
-        if clear:
+        if self._clear:
             self.clear()
 
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.touch(exist_ok=True)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.touch(exist_ok=True)
 
         # open file as append mode.
-        self._file = self.path.open('a')
-    # end of [function] __init__
+        self._file = self._path.open("a")
 
-    def write(self, line: object = '', debug_ok: Optional[bool] = None) -> None:
+    def write(self, line: object = "", debug_ok: bool = None) -> None:
         if self._is_write:
             self._file.write(str(line))
 
         if self._debug_ok(debug_ok):
-            print(f'\r{line}', end='')
-    # end of [function] write
+            print(f"\r{line}", end="")
 
-    def writeline(self, line='', debug_ok: Optional[bool] = None) -> None:
+    def writeline(self, line: object = "", debug_ok: bool = None) -> None:
         if self._is_write:
-            self._file.write(f'{line}\n')
+            self._file.write(f"{line}\n")
 
         if self._debug_ok(debug_ok):
             print(line)
-    # end of [function] writeline
 
     def clear(self) -> None:
-        if self.path.exists():
-            self.path.unlink()  # delete
-        self.path.touch()  # create
-    # end of [function] clear
+        if not self._is_write:
+            return
+
+        if self._path.exists():
+            self._path.unlink()  # delete
+        self._path.touch()  # create
 
     def _debug_ok(self, debug_ok: Optional[bool]) -> bool:
         if debug_ok is not None:
             return debug_ok  # priority `debug_ok`
-        return self.std_debug_ok
-    # end of [function] _debug_ok
+        return self._std_debug_ok
 
     def close(self) -> None:
-        self._file.close()
-    # end of [function] close
-# end of [class] LogFile
+        if self._is_write:
+            self._file.close()
 
 
-def create_file_path(dir_path: Union[str, Path], name: str, head: Optional[str] = None,
-                     end: str = '', ext='txt') -> str:
+def create_file_path(
+    dir_path: _path_t, name: str, head: str = None, end: str = "", ext="txt"
+) -> str:
     parent = Path(dir_path)
 
-    _head = head if head is not None \
-        else str(len([x for x in parent.glob(f'*.{ext}')])) + '_'
+    _head = head if head is not None else str(len([x for x in parent.glob(f"*.{ext}")])) + "_"
 
-    path = parent.joinpath(f'{_head}{name}{end}.{ext}')
+    path = parent.joinpath(f"{_head}{name}{end}.{ext}")
     return path.as_posix()
-# end of [function] create_file_path
 
 
-@dataclass(init=False)
-class ProgressLog():
-    def __init__(self, line: str) -> None:
-        self.line = line
+@dataclass
+class ProgressLog:
+    line: str
+
+    def __post_init__(self):
         self.progress()
-    # end of [function] __init__
 
     def progress(self) -> None:
-        print(f'LOG: [running] {self.line} ...', end='', flush=True)
-    # end of [function] progress
+        print(f"LOG: [running] {self.line} ...", end="", flush=True)
 
     def complete(self) -> None:
-        print(f'\rLOG: [completed] {self.line}. \n')
-    # end of [function] complete
-# end of [class] ProgressLog
+        print(f"\rLOG: [completed] {self.line}. \n")
 
 
 def make_directories(*dir_list) -> None:
@@ -103,46 +100,33 @@ def make_directories(*dir_list) -> None:
             dir_path = Path(dir_path)
 
         dir_path.mkdir(parents=True, exist_ok=True)
-# end of [function] make_directories
 
 
-def load_classes(path='config/classes.txt') -> dict:
+def load_classes(path="config/classes.txt") -> dict:
     path = Path(path)
     classes = {}
 
     if not path.exists():
-        # raise FileNotFoundError
         return classes
 
-    lines = path.read_text().split('\n')
+    lines = path.read_text().split("\n")
 
     for line in lines:
-        _list = line.split(':')
+        _list = line.split(":")
         if len(_list) < 2:
             continue
 
         x, y = list(map(lambda x: x.strip(), _list))
         classes[int(x)] = y
-
     return classes
-# end of [function] load_classes
 
 
-def find_str(_str: str, keyword: str) -> bool:
-    if _str.find(keyword) > -1:
-        return True
-
-    return False
-# end of [function] find_str
-
-
-def raise_when_FileNotFound(path) -> None:
+def raise_when_FileNotFound(path: _path_t) -> None:
     if os.path.exists(str(path)):
         return
 
     err = OSError(errno.ENOENT, os.strerror(errno.ENOENT), path)
     raise FileNotFoundError(err)
-# end of [function] raise_when_FileNotFound
 
 
 # def set_align_ljust(content: str, align: int = 10) -> str:

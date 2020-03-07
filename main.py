@@ -13,10 +13,9 @@ import utils as ul
 
 def parse_argument() -> Namespace:
     parser = ArgumentParser()
-    parser.add_argument('-p', '--path', help='path of `user_settings.toml`.', default=None)
+    parser.add_argument("-p", "--path", help="path of `user_settings.toml`.", default=None)
 
     return parser.parse_args()
-# end of [function] parse_argument
 
 
 def main() -> int:
@@ -28,12 +27,15 @@ def main() -> int:
     Returns:
         int: exit status.
     """
+
+    # determine toml path
     args = parse_argument()
     toml_path = args.path
     if toml_path is not None:
-        print(f'Set `toml_path` to {toml_path}')
+        print(f"Set `toml_path` to {toml_path}")
+
+    # factory toml settings
     tms = _tms.factory(toml_path)
-    exit()
 
     """ DEBUG NOW """
     tms.is_save_debug_log = False
@@ -44,8 +46,8 @@ def main() -> int:
     ul.raise_when_FileNotFound(tms.dataset_path)
 
     # ===== log / rate file =====
-    log = ul.LogFile(None, std_debug_ok=False)
-    rate = ul.LogFile(None, std_debug_ok=False)
+    log = ul.LogFile(std_debug_ok=False)
+    rate = ul.LogFile(std_debug_ok=False)
 
     # debug log
     if tms.is_save_debug_log:
@@ -54,11 +56,11 @@ def main() -> int:
 
     # rate log
     if tms.is_save_rate_log:
-        p = ul.create_file_path(tms.log_path, tms.filename_base, ext='csv')
+        p = ul.create_file_path(tms.log_path, tms.filename_base, ext="csv")
         rate = ul.LogFile(p, std_debug_ok=False)
 
     # ===== datasets =====
-    progress = ul.ProgressLog(f'Create dataset from \'{tms.dataset_path}\'')
+    progress = ul.ProgressLog(f"Create dataset from '{tms.dataset_path}'")
 
     # train, unknown, known
     dataset = tu.CreateDataset(
@@ -66,7 +68,8 @@ def main() -> int:
         extensions=tms.extensions,
         test_size=tms.test_size,
         config_path=tms.config_path,
-        limit_size=tms.limit_dataset_size)
+        limit_size=tms.limit_dataset_size,
+    )
     progress.complete()
 
     # ===== calculate dataset normalization =====
@@ -82,16 +85,17 @@ def main() -> int:
     # progress.complete()
 
     # transform
-    transform = transforms.Compose([
-        transforms.Resize(tms.input_size),
-        transforms.ToTensor(),
-        # transforms.Normalize(mean=mean, std=std),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.Resize(tms.input_size),
+            transforms.ToTensor(),
+            # transforms.Normalize(mean=mean, std=std),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        ]
+    )
 
     # loader = {'train': [...], 'unknown': [...], 'known': [...]}
-    loader = dataset.create_dataloader(
-        tms.batch, transform, tms.is_shuffle_per_epoch)
+    loader = dataset.create_dataloader(tms.batch, transform, tms.is_shuffle_per_epoch)
 
     # make directories
     pth_save_path = tms.pth_save_path if tms.is_save_final_pth else None
@@ -100,20 +104,18 @@ def main() -> int:
     log_path = tms.log_path if is_save_log else None
 
     ul.make_directories(
-        tms.false_path,
-        log_path,
-        pth_save_path,
+        tms.false_path, log_path, pth_save_path,
     )
 
     # rate log
     cls_list = dataset.classes.values()
-    _ = ', ' * len(cls_list)
-    rate.writeline(f', unknown {_}, known {_}')
-    _ = ', '.join(cls_list)
-    rate.writeline(f'Test No, {_}, TOTAL, {_}, TOTAL')
+    _ = ", " * len(cls_list)
+    rate.writeline(f", unknown {_}, known {_}")
+    _ = ", ".join(cls_list)
+    rate.writeline(f"Test No, {_}, TOTAL, {_}, TOTAL")
 
     # ===== network =====
-    progress = ul.ProgressLog('Building CNN network')  # debug log
+    progress = ul.ProgressLog("Building CNN network")  # debug log
 
     # build network
     model = tu.Model(
@@ -140,30 +142,26 @@ def main() -> int:
     if tms.is_save_final_pth:
         # pth path
         save_path = ul.create_file_path(
-            tms.pth_save_path, tms.filename_base, end='_final', ext='pth')
+            tms.pth_save_path, tms.filename_base, end="_final", ext="pth"
+        )
 
-        progress = ul.ProgressLog(f'Saving model to \'{save_path}\'')
+        progress = ul.ProgressLog(f"Saving model to '{save_path}'")
 
-        save_option = [True, True] if tms.is_available_re_training \
-            else [False, False]
-        model.save_model(save_path, save_option)  # save
+        save_option = [True, True] if tms.is_available_re_training else [False, False]
+        model.save(save_path, *save_option)  # save
 
         progress.complete()
 
-        log.writeline(f'# Saved model to \'{save_path}\'', debug_ok=False)
+        log.writeline(f"# Saved model to '{save_path}'", debug_ok=False)
 
     # close file when opening.
-    if tms.is_save_debug_log:
-        log.close()
-    if tms.is_save_rate_log:
-        rate.close()
+    log.close()
+    rate.close()
 
     return 0
-# end of [function] main
 
 
-def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset,
-                             log: ul.LogFile) -> None:
+def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset, log: ul.LogFile) -> None:
     r"""Show network difinition on console.
 
     Args:
@@ -174,42 +172,41 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset,
     tms = model.tms
 
     global_conf = {
-        'run time': tms.filename_base,
-        'image path': tms.dataset_path,
-        'supported extensions': tms.extensions,
-        'saving debug log is': tms.is_save_debug_log,
-        'saving rate log is': tms.is_save_rate_log,
-        'pth save cycle': tms.pth_save_cycle,
-        'test cycle': tms.test_cycle,
-        'saving final pth is': tms.is_save_final_pth,
-        'Grad-CAM is': tms.is_grad_cam,
-        'Grad-CAM layer': tms.grad_cam_layer,
-        'load model is ': tms.is_load_model,
-        'load path': tms.load_pth_path if tms.is_load_model else 'None',
+        "run time": tms.filename_base,
+        "image path": tms.dataset_path,
+        "supported extensions": tms.extensions,
+        "saving debug log is": tms.is_save_debug_log,
+        "saving rate log is": tms.is_save_rate_log,
+        "pth save cycle": tms.pth_save_cycle,
+        "test cycle": tms.test_cycle,
+        "saving final pth is": tms.is_save_final_pth,
+        "Grad-CAM is": tms.is_grad_cam,
+        "Grad-CAM layer": tms.grad_cam_layer,
+        "load model is ": tms.is_load_model,
+        "load path": tms.load_pth_path if tms.is_load_model else "None",
     }
 
     dataset_conf = {
-        'limit dataset size': tms.limit_dataset_size,
-        'train dataset size': dataset.train_size,
-        'unknown dataset size': dataset.unknown_size,
-        'known dataset size': dataset.known_size,
+        "limit dataset size": tms.limit_dataset_size,
+        "train dataset size": dataset.train_size,
+        "unknown dataset size": dataset.unknown_size,
+        "known dataset size": dataset.known_size,
     }
 
     model_conf = {
-        'net': str(model.net),
-        'optimizer': str(model.optimizer),
-        'criterion': str(model.criterion),
-        'input size': f'(h: {tms.height}, w: {tms.width})',
-        'epoch': tms.epoch,
-        'batch size': tms.batch,
-        'subdivision': tms.subdivision,
-        'GPU available': torch.cuda.is_available(),
-        'GPU used': tms.use_gpu and torch.cuda.is_available(),
-        're-training': ('available' if tms.is_available_re_training
-                        else 'not available'),
+        "net": str(model.net),
+        "optimizer": str(model.optimizer),
+        "criterion": str(model.criterion),
+        "input size": f"(h: {tms.height}, w: {tms.width})",
+        "epoch": tms.epoch,
+        "batch size": tms.batch,
+        "subdivision": tms.subdivision,
+        "GPU available": torch.cuda.is_available(),
+        "GPU used": tms.use_gpu and torch.cuda.is_available(),
+        "re-training": ("available" if tms.is_available_re_training else "not available"),
     }
 
-    def _inner_execute(_dict: Dict[str, Any], head: str = '') -> None:
+    def _inner_execute(_dict: Dict[str, Any], head: str = "") -> None:
         r"""execute.
 
         Args:
@@ -224,20 +221,18 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset,
 
         for k, v in _dict.items():
             # format for structure of network
-            if isinstance(v, str) and v.find('\n') > -1:
-                v = v.replace('\n', '\n' + ' ' * (max_len + 3)).rstrip()
+            if isinstance(v, str) and v.find("\n") > -1:
+                v = v.replace("\n", "\n" + " " * (max_len + 3)).rstrip()
 
-            log.writeline(f'{k.center(max_len)} : {v}', debug_ok=True)
-        log.writeline('\n', debug_ok=True)
-    # end of [function] _inner_execute
+            log.writeline(f"{k.center(max_len)} : {v}", debug_ok=True)
+        log.writeline("\n", debug_ok=True)
 
     classes = {str(k): v for k, v in model.classes.items()}
 
-    _inner_execute(classes, '--- Classify Classes ---')
-    _inner_execute(global_conf, '--- Global Config ---')
-    _inner_execute(dataset_conf, '--- Dataset Config ---')
-    _inner_execute(model_conf, '--- Model Config ---')
-# end of [function] _show_parameter_config
+    _inner_execute(classes, "--- Classify Classes ---")
+    _inner_execute(global_conf, "--- Global Config ---")
+    _inner_execute(dataset_conf, "--- Dataset Config ---")
+    _inner_execute(model_conf, "--- Model Config ---")
 
 
 def _get_rate_log_as_table():

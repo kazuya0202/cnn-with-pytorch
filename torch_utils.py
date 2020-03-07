@@ -3,7 +3,7 @@ import random
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
@@ -46,29 +46,30 @@ class Data:
             tuple: Items of class.
         """
         return self.path, self.label, self.name
-    # end of [function] items
-# end of [class] Data
 
 
-@dataclass(init=False)
+@dataclass
 class CreateDataset(Dataset):
-    r"""Creating dataset."""
+    r"""Creating dataset.
 
-    def __init__(self, path: str, extensions: list, test_size: Union[float, int],
-                 config_path: str = 'config', limit_size: int = None) -> None:
-        r"""
-        Args:
-            path (str): path of image directory.
-            extensions (list): supported extensions.
-            test_size (Union[float, int]): test image size.
-            config_path (str, optional): export path of config. Defaults to 'config'.
-        """
+    Args:
+        path (str): path of image directory.
+        extensions (list): supported extensions.
+        test_size (Union[float, int]): test image size.
+        config_path (str, optional): export path of config. Defaults to 'config'.
+    """
+    path: str
+    extensions: list
+    test_size: Union[float, int]
+    config_path: str = "config"
+    limit_size: Optional[int] = None
 
-        self.path = path
-        self.extensions = extensions
-        self.test_size = test_size
-        self.config_path = config_path
-        self.limit_size = limit_size
+    def __post_init__(self):
+        # self.path = path
+        # self.extensions = extensions
+        # self.test_size = test_size
+        # self.config_path = config_path
+        # self.limit_size = limit_size
 
         # {'train': [], 'unknown': [], 'known': []}
         self.all_list: Dict[str, List[Data]]
@@ -86,50 +87,50 @@ class CreateDataset(Dataset):
 
         self._get_all_datas()  # train / unknown / known
         self._write_config()  # write config of model
-    # end of [function] __init__
 
     def _get_all_datas(self) -> None:
         r"""Get all datas from each directory."""
 
         # init
-        self.all_list = {'train': [], 'unknown': [], 'known': []}
+        self.all_list = {"train": [], "unknown": [], "known": []}
         self.classes = {}
 
         path = Path(self.path)
 
         # directories in [image_path]
-        dirs = [d for d in path.glob('*') if d.is_dir()]
+        dirs = [d for d in path.glob("*") if d.is_dir()]
 
         # all extensions / all sub directories
-        for idx, _dir in enumerate(dirs):
+        for label_idx, _dir in enumerate(dirs):
             xs = []
 
             for ext in self.extensions:
-                tmp = [Data(x.as_posix(), idx, _dir.name)
-                       for x in _dir.glob(f'*.{ext}') if x.is_file()]
+                tmp = [
+                    Data(x.as_posix(), label_idx, _dir.name)
+                    for x in _dir.glob(f"*.{ext}")
+                    if x.is_file()
+                ]
                 xs.extend(tmp)
 
             # adjust to limit size
             if self.limit_size is not None:
                 random.shuffle(xs)
-                xs = xs[:self.limit_size]
+                xs = xs[: self.limit_size]
 
             # split dataset
-            train, test = train_test_split(
-                xs, test_size=self.test_size, shuffle=True)
+            train, test = train_test_split(xs, test_size=self.test_size, shuffle=True)
 
-            self.all_list['train'].extend(train)
-            self.all_list['unknown'].extend(test)
-            self.all_list['known'].extend(random.sample(train, len(test)))
+            self.all_list["train"].extend(train)
+            self.all_list["unknown"].extend(test)
+            self.all_list["known"].extend(random.sample(train, len(test)))
 
-            self.classes[idx] = _dir.name
+            self.classes[label_idx] = _dir.name
 
-        self.train_size = len(self.all_list['train'])
-        self.unknown_size = len(self.all_list['unknown'])
-        self.known_size = len(self.all_list['known'])
+        self.train_size = len(self.all_list["train"])
+        self.unknown_size = len(self.all_list["unknown"])
+        self.known_size = len(self.all_list["known"])
 
         self.all_size = self.train_size + self.unknown_size
-    # end of [function] __get_all_datas
 
     def _write_config(self) -> None:
         r"""Writing configs."""
@@ -139,7 +140,7 @@ class CreateDataset(Dataset):
 
         def _inner_execute(add_path: str, target: str):
             path = _dir.joinpath(add_path)
-            file_ = ul.LogFile(path, std_debug_ok=False, clear=True)
+            file_ = ul.LogFile(path, std_debug_ok=False, _clear=True)
 
             for x in self.all_list[target]:
                 p = Path(x.path).resolve()  # convert to absolute path
@@ -148,15 +149,15 @@ class CreateDataset(Dataset):
             file_.close()
 
         # -- train image
-        _inner_execute('train_used_images.txt', 'train')
+        _inner_execute("train_used_images.txt", "train")
         # -- unknown image
-        _inner_execute('unknown_used_images.txt', 'unknown')
+        _inner_execute("unknown_used_images.txt", "unknown")
         # -- known image
-        _inner_execute('known_used_images.txt', 'known')
-    # end of [function] __write_config
+        _inner_execute("known_used_images.txt", "known")
 
-    def create_dataloader(self, batch_size: int = 64, transform: transforms = None,
-                          is_shuffle: bool = True) -> Dict[str, DataLoader]:
+    def create_dataloader(
+        self, batch_size: int = 64, transform: transforms = None, is_shuffle: bool = True
+    ) -> Dict[str, DataLoader]:
         r"""Create DataLoader instance of `train`, `unknown`, `known` dataset.
 
         Args:
@@ -169,40 +170,32 @@ class CreateDataset(Dataset):
         """
 
         # create dataset
-        train_ = CustomDataset(self.all_list['train'], transform)
-        unknown_ = CustomDataset(self.all_list['unknown'], transform)
-        known_ = CustomDataset(self.all_list['known'], transform)
+        train_ = CustomDataset(self.all_list["train"], transform)
+        unknown_ = CustomDataset(self.all_list["unknown"], transform)
+        known_ = CustomDataset(self.all_list["known"], transform)
 
         train_data = DataLoader(train_, batch_size=batch_size, shuffle=is_shuffle)
         unknown_data = DataLoader(unknown_, batch_size=1, shuffle=is_shuffle)
         known_data = DataLoader(known_, batch_size=1, shuffle=is_shuffle)
 
         # return train_data, unknown_data, known_data
-        return {
-            'train': train_data,
-            'unknown': unknown_data,
-            'known': known_data
-        }
-    # end of [function] create_dataloader
-# end of [class] CreateDataset
+        return {"train": train_data, "unknown": unknown_data, "known": known_data}
 
 
-@dataclass(init=False)
+@dataclass
 class CustomDataset(Dataset):
-    r"""Custom dataset."""
+    r"""Custom dataset
 
-    def __init__(self, target_list: list, transform: transforms = None) -> None:
-        r"""
-        Args:
-            # dataset (CreateDataset): dataset config
-            target (str, optional): target dataset. Defaults to 'train'.
-            transform (transforms, optional): transform of tensor. Defaults to None.
-        """
+    Args:
+        # dataset (CreateDataset): dataset config
+        target (str, optional): target dataset. Defaults to 'train'.
+        transform (transforms, optional): transform of tensor. Defaults to None.
+    """
+    target_list: List[Data]
+    transform: transforms = None
 
-        self.transform = transform
-        self.target_list: List[Data] = target_list
+    def __post_init__(self):
         self.list_size = len(self.target_list)
-    # end of [function] __init__
 
     def __getitem__(self, idx: int) -> Tuple[np.ndarray, int, str]:
         r"""Returns image data, label, path
@@ -217,13 +210,11 @@ class CustomDataset(Dataset):
         path, label, name = x.items()
 
         img = Image.open(path)
-        img = img.convert('RGB')
+        img = img.convert("RGB")
 
         if self.transform is not None:
             img = self.transform(img)
-
         return img, label, path
-    # end of [function] __getitem__
 
     def __len__(self):
         r"""Returns length.
@@ -232,22 +223,22 @@ class CustomDataset(Dataset):
             int: length.
         """
         return self.list_size
-    # end of [function] __len__
-# end of [class] CustomDataset
 
 
-@dataclass(init=False)
+@dataclass
 class Model:
-    def __init__(self, classes, loader, tms: _tms.TomlSettings, **options) -> None:
+    def __init__(
+        self, classes: Dict[int, str], loader: Any, tms: _tms.TomlSettings, **options,
+    ) -> None:
         r"""
         **options
-            log (ul.LogFile): Defaults to ul.LogFile(None).
-            rate (ul.LogFile): Defaults to ul.LogFile(None).
+            log (ul.LogFile): Defaults to ul.LogFile().
+            rate (ul.LogFile): Defaults to ul.LogFile().
         """
 
-        self.train_loader: DataLoader = loader.pop('train', None)
-        self.unknown_loader: DataLoader = loader.pop('unknown', None)
-        self.known_loader: DataLoader = loader.pop('known', None)
+        self.train_loader: DataLoader = loader.pop("train", None)
+        self.unknown_loader: DataLoader = loader.pop("unknown", None)
+        self.known_loader: DataLoader = loader.pop("known", None)
 
         _optim_t = Union[optim.Adam, radam.RAdam, optim.SGD]
         self.net: cnn.Net
@@ -259,11 +250,11 @@ class Model:
 
         # gpu setting
         use_gpu = torch.cuda.is_available() and tms.use_gpu
-        self.device = torch.device('cuda' if use_gpu else 'cpu')
+        self.device = torch.device("cuda" if use_gpu else "cpu")
 
-        # **options
-        self.log: ul.LogFile = options.pop('log', ul.LogFile(None))
-        self.rate: ul.LogFile = options.pop('rate', ul.LogFile(None))
+        # options
+        self.log: ul.LogFile = options.pop("log", ul.LogFile())
+        self.rate: ul.LogFile = options.pop("rate", ul.LogFile())
 
         self.current_epoch: int
 
@@ -274,30 +265,29 @@ class Model:
         self.writer = tbx.SummaryWriter()
 
         # Grad-CAM setting
-        self.egc = ExecuteGradCAM(list(self.classes.values()), tms.input_size,
-                                  tms.grad_cam_layer, is_grad_cam=True)
+        self.egc = ExecuteGradCAM(
+            list(self.classes.values()), tms.input_size, tms.grad_cam_layer, is_grad_cam=True
+        )
 
         # -----
 
         # re-training
         if tms.is_load_model:
-            self._load_model(tms.load_pth_path)
+            self._load(tms.load_pth_path)
             self.max_epoch -= self.current_epoch  # 0 ~ (max_epoch-current_epoch) times.
         else:
-            self._build_model()  # build model
+            self._build()  # build model
 
         self._write_classes()  # save classes
 
         # for making false path
         base = Path(self.tms.false_path, self.tms.filename_base)
-        self.false_paths = [base.joinpath(f'epoch{ep}') for ep in range(self.max_epoch)]
+        self.false_paths = [base.joinpath(f"epoch{ep}") for ep in range(self.max_epoch)]
         ul.make_directories(*self.false_paths)
 
         if self.tms.pth_save_cycle != 0:
-            self.pth_save_path = f'{self.tms.pth_save_path}/{self.tms.filename_base}'
+            self.pth_save_path = f"{self.tms.pth_save_path}/{self.tms.filename_base}"
             ul.make_directories(self.pth_save_path)
-
-    # end of [function] __init__
 
     def train(self):
         r"""Training model."""
@@ -312,12 +302,11 @@ class Model:
         # switch to train
         self.net.train()
 
-        self.log.writeline('# Start training.', False)
+        self.log.writeline("# Start training.", False)
         plot_point = 0  # for tensorboard
 
         # [optimizer, epoch]
-        save_option = [True, True] if self.tms.is_available_re_training \
-            else [False, False]
+        save_option = [True, True] if self.tms.is_available_re_training else [False, False]
 
         # loop epoch
         for epoch in range(self.max_epoch):
@@ -326,14 +315,18 @@ class Model:
             total_loss = 0  # total loss
             total_acc = 0  # total accuracy
 
-            self.log.writeline(f'----- Epoch: {epoch + 1} -----', debug_ok=True)
+            self.log.writeline(f"----- Epoch: {epoch + 1} -----", debug_ok=True)
 
             subdivision = self.tms.subdivision
 
             # batch in one epoch (outer tqdm)
-            pbar = tqdm(self.train_loader, total=len(self.train_loader),  # subdivision
-                        ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
-            pbar.set_description('TRAIN')
+            pbar = tqdm(
+                self.train_loader,
+                total=len(self.train_loader),  # subdivision
+                ncols=100,
+                bar_format="{l_bar}{bar:30}{r_bar}",
+            )
+            pbar.set_description("TRAIN")
 
             # batch process
             for batch_idx, items in enumerate(pbar):
@@ -376,7 +369,7 @@ class Model:
                 loss_val = batch_loss / subdivision  # calc avg loss value
 
                 # tensorboard log
-                self.writer.add_scalar('data/loss', loss_val, plot_point)
+                self.writer.add_scalar("data/loss", loss_val, plot_point)
                 plot_point += 1
 
                 # label
@@ -390,7 +383,7 @@ class Model:
 
                 # cls_bool = [label_ans[i] for i, x in enumerate(pred_bool) if not x]
 
-                pred_bool = (label_ans == predicted)  # matching
+                pred_bool = label_ans == predicted  # matching
                 # index of mistake prediction
                 false_step = [idx for idx, x in enumerate(pred_bool) if not x]
 
@@ -399,7 +392,7 @@ class Model:
                     fp = self.false_paths[epoch]
                     name = Path(str(paths[idx])).name
 
-                    img_path = Path(fp, f'batch_{batch_idx}-{name}')
+                    img_path = Path(fp, f"batch_{batch_idx}-{name}")
                     img_path.parent.mkdir(parents=True, exist_ok=True)
 
                     save_image(imgs[idx], str(img_path))  # save
@@ -415,14 +408,15 @@ class Model:
 
                 # for tqdm message
                 pbar.set_postfix(
-                    ordered_dict=OrderedDict(loss=f'{loss_val:<.6f}', acc=f'{acc:<.6f}'))
+                    ordered_dict=OrderedDict(loss=f"{loss_val:<.6f}", acc=f"{acc:<.6f}")
+                )
 
                 # for log
-                ss = f'loss: {loss_val:<.6f} / acc: {acc:<.6f}'
-                ss += f'\n  -> ans   : {label_ans}'
-                ss += f'\n  -> result: {predicted}'
+                ss = f"loss: {loss_val:<.6f} / acc: {acc:<.6f}"
+                ss += f"\n  -> ans   : {label_ans}"
+                ss += f"\n  -> result: {predicted}"
 
-                self.log.writeline(ss)
+                self.log.writeline(ss, debug_ok=False)
 
                 # break
                 # end of this batch
@@ -430,7 +424,7 @@ class Model:
             # add confusion matrix to tensorboard
             cm = calc_confusion_matrix(all_label, all_pred, len(self.classes))
             fig = plot_confusion_matrix(cm, list(self.classes.values()))
-            add_to_tensorboard(self.writer, fig, 'confusion matrix', epoch)
+            add_to_tensorboard(self.writer, fig, "confusion matrix", epoch)
 
             # calclate total loss / accuracy
             size = len(self.train_loader.dataset)
@@ -438,18 +432,18 @@ class Model:
             total_acc = total_acc / size
 
             # for log
-            self.log.writeline('\n---------------')
-            self.log.writeline(f'Total loss: {total_loss}')
-            self.log.writeline(f'Total acc: {total_acc}')
-            self.log.writeline('---------------\n')
+            self.log.writeline("\n---------------")
+            self.log.writeline(f"Total loss: {total_loss}")
+            self.log.writeline(f"Total acc: {total_acc}")
+            self.log.writeline("---------------\n")
 
             # for tqdm
-            print(f'  Total loss: {total_loss}')
-            print(f'  Total acc: {total_acc}\n')
+            print(f"  Total loss: {total_loss}")
+            print(f"  Total acc: {total_acc}\n")
 
             # for tensorboard
-            self.writer.add_scalar('data/total_acc', total_acc, epoch)
-            self.writer.add_scalar('data/total_loss', total_loss, epoch)
+            self.writer.add_scalar("data/total_acc", total_acc, epoch)
+            self.writer.add_scalar("data/total_loss", total_loss, epoch)
 
             # exec test cycle
             if test_schedule[epoch]:
@@ -458,14 +452,15 @@ class Model:
             # save pth cycle
             if pth_save_schedule[epoch]:
                 save_path = ul.create_file_path(
-                    self.pth_save_path, '', head=f'epoch{epoch + 1}', ext='pth')
+                    self.pth_save_path, "", head=f"epoch{epoch + 1}", ext="pth"
+                )
 
-                progress = ul.ProgressLog(f'Saving model to \'{save_path}\'')
-                self.save_model(save_path, *save_option)  # save
+                progress = ul.ProgressLog(f"Saving model to '{save_path}'")
+                self.save(save_path, *save_option)  # save
                 progress.complete()
 
                 # log
-                self.log.writeline(f'# Saved model to \'{save_path}\'')
+                self.log.writeline(f"# Saved model to '{save_path}'")
 
             # break
             # end of this epoch
@@ -475,18 +470,17 @@ class Model:
         self.writer.close()
 
         # end of all epoch
-    # end of [function] train
 
     def test(self):
         r"""Testing model."""
         # log
-        self.log.writeline('# Start testing.\n', False)
+        self.log.writeline("# Start testing.\n", False)
 
         # ss = ul.set_align_center(str(self.current_epoch)) + ' | '
         # self.rate.write(ss)
         self.rate.write(self.current_epoch)
 
-        def _inner_execute(data_loader: DataLoader, target: str = 'unknown'):
+        def _inner_execute(data_loader: DataLoader, target: str = "unknown"):
             """ Execute unknown or known dataset.
 
             Args:
@@ -504,9 +498,13 @@ class Model:
                 acc_size = dict([(_cls, [0, 0]) for _cls in self.classes.keys()])
 
                 # test
-                pbar = tqdm(data_loader, total=len(data_loader.dataset),
-                            ncols=100, bar_format='{l_bar}{bar:30}{r_bar}')
-                pbar.set_description('TEST[{}]'.format(target.center(7)))
+                pbar = tqdm(
+                    data_loader,
+                    total=len(data_loader.dataset),
+                    ncols=100,
+                    bar_format="{l_bar}{bar:30}{r_bar}",
+                )
+                pbar.set_description("TEST[{}]".format(target.center(7)))
 
                 for batch_idx, items in enumerate(pbar):
                     img_data: Tensor
@@ -546,15 +544,20 @@ class Model:
                     ret = self.egc.main(self.net, path)
 
                     # base path
-                    base_dir = Path(self.tms.grad_cam_path, self.tms.filename_base,
-                                    'false', target, f'epoch_{self.current_epoch}')
+                    base_dir = Path(
+                        self.tms.grad_cam_path,
+                        self.tms.filename_base,
+                        "false",
+                        target,
+                        f"epoch_{self.current_epoch}",
+                    )
                     base_dir.mkdir(parents=True, exist_ok=True)
 
                     for key, data_list in ret.items():
                         for i, img_data in enumerate(data_list):
                             # save path
-                            ss = f'{batch_idx}_{self.classes[i]}_{key}'
-                            ss += f'_pred[{predicted}]_correct[{label_ans}].png'
+                            ss = f"{batch_idx}_{self.classes[i]}_{key}"
+                            ss += f"_pred[{predicted}]_correct[{label_ans}].png"
                             _path = base_dir.joinpath(ss)
 
                             cv2.imwrite(str(_path), img_data)  # save
@@ -573,15 +576,15 @@ class Model:
                     acc = acc_num / all_num
                     total_acc += acc
 
-                    ss = '%-12s -> ' % f'[{_cls}]'
-                    ss += f'acc: {acc:<.4f} ({acc_num} / {all_num} images.)'
+                    ss = "%-12s -> " % f"[{_cls}]"
+                    ss += f"acc: {acc:<.4f} ({acc_num} / {all_num} images.)"
                     self.log.writeline(ss)
-                    print(f'  {ss}')
+                    print(f"  {ss}")
 
                     # rate log
                     # ss = ul.set_align_ljust(str(acc), align=15)
                     # self.rate.write(ss)
-                    self.rate.write(f', {acc}')
+                    self.rate.write(f", {acc}")
 
                     # end of calculate accuracy of each class and total
 
@@ -589,28 +592,26 @@ class Model:
 
                 # total accuracy
                 total_acc /= len(self.classes)
-                self.log.writeline(f'Total acc: {total_acc}\n')
-                self.rate.write(f', {total_acc}')
+                self.log.writeline(f"Total acc: {total_acc}\n")
+                self.rate.write(f", {total_acc}")
 
                 # for tqdm
-                print(f'  Total acc: {total_acc}\n')
-        # end of [function] __execute
+                print(f"  Total acc: {total_acc}\n")
 
         # unknown test
-        _inner_execute(self.unknown_loader, 'unknown')
+        _inner_execute(self.unknown_loader, "unknown")
 
         # knwon test
         if self.known_loader is not None:
-            _inner_execute(self.known_loader, 'known')
+            _inner_execute(self.known_loader, "known")
         else:
             # spacing
             # self.rate.write(' ' * 15)
-            self.rate.write(', -' * len(self.classes))
+            self.rate.write(", -" * len(self.classes))
 
         self.rate.writeline()
-    # end of [function] test
 
-    def _build_model(self):
+    def _build(self):
         r"""Building model.
 
         using ...
@@ -618,8 +619,11 @@ class Model:
             criterion: `CrossEntropyLoss`
         """
         # network
-        params = dict(input_size=self.tms.input_size,
-                      classify_size=self.classify_size, in_channels=self.tms.channels)
+        params = dict(
+            input_size=self.tms.input_size,
+            classify_size=self.classify_size,
+            in_channels=self.tms.channels,
+        )
         self.net = cnn.Net(**params)
 
         options = dict(lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
@@ -633,9 +637,8 @@ class Model:
 
         self.net.zero_grad()  # init all gradient
         self.net.to(self.device)  # switch to GPU / CPU
-    # end of [function] _build_model
 
-    def _load_model(self, path: str):
+    def _load(self, path: str) -> None:
         r"""Load model.
 
         Args:
@@ -648,52 +651,47 @@ class Model:
         checkpoint = torch.load(path)
 
         # classes, net
-        self.classes = checkpoint['classes']
-        self.net.load_state_dict(checkpoint['model_state_dict'])
+        self.classes = checkpoint["classes"]
+        self.net.load_state_dict(checkpoint["model_state_dict"])
 
         # key is exists, load value and it assign to variable.
         # key is not exists, initialize value and it assign to variable.
-        self.optimizer = checkpoint.pop(
-            'optimizer_state_dict', optim.Adam(self.net.parameters()))
-        self.current_epoch = checkpoint('epoch', 0)
+        self.optimizer = checkpoint.pop("optimizer_state_dict", optim.Adam(self.net.parameters()))
+        self.current_epoch = checkpoint("epoch", 0)
 
         self.criterion = nn.CrossEntropyLoss()
-    # end of [function] _load_model
 
-    def save_model(self, path: str, optimizer=False, epoch=False):
+    def save(self, path: str, optimizer: bool = False, epoch: bool = False) -> None:
         r"""Save Model.
 
         Args:
             path (str): save path.
-
             optimizer (bool): save `optimizer state_dict`. Defaults to False.
             epoch (bool): save `current epoch`. Defaults to Flase.
         """
         save_config = {
-            'classes': self.classes,
-            'model_state_dict': self.net.state_dict(),
+            "classes": self.classes,
+            "model_state_dict": self.net.state_dict(),
         }
 
         # options (for re-training)
         if optimizer:
-            save_config['optimizer_state_dict'] = self.optimizer.state_dict()
+            save_config["optimizer_state_dict"] = self.optimizer.state_dict()
         if epoch:
-            save_config['epoch'] = self.current_epoch
+            save_config["epoch"] = self.current_epoch
 
         torch.save(save_config, path)
-    # end of [function] save_model
 
-    def _write_classes(self):
+    def _write_classes(self) -> None:
         r"""Writing classes of dataset."""
-        path = Path(self.tms.config_path, 'classes.txt')
-        file_ = ul.LogFile(path, std_debug_ok=False, clear=True)
+        path = Path(self.tms.config_path, "classes.txt")
+        file_ = ul.LogFile(path, std_debug_ok=False, _clear=True)
 
         path.parent.mkdir(parents=True, exist_ok=True)
 
         for k, _cls in self.classes.items():
-            file_.writeline(f'{k}:{_cls}')
+            file_.writeline(f"{k}:{_cls}")
         file_.close()
-    # end of [function] _write_classes
 
     def _create_schedule(self, cycle: int) -> List[bool]:
         r"""Returns exec schedule of cycle.
@@ -714,12 +712,11 @@ class Model:
             if (i + 1) % cycle == 0:
                 schedule[i] = True
         return schedule
-    # end of [function] __create_schedule
-# end of [class] Model
 
 
-def add_to_tensorboard(writer: tbx.SummaryWriter, fig: plt.figure,
-                       title: str, step: int = 0) -> None:
+def add_to_tensorboard(
+    writer: tbx.SummaryWriter, fig: plt.figure, title: str, step: int = 0
+) -> None:
     r"""Add plot image to TensorBoard.
 
     Args:
@@ -734,12 +731,15 @@ def add_to_tensorboard(writer: tbx.SummaryWriter, fig: plt.figure,
 
     writer.add_image(title, img_ar)
     plt.close()  # clear plot
-# end of [function] add_to_tensorboard
 
 
-def plot_confusion_matrix(cm: Union[Tensor, np.ndarray], classes: List[str],
-                          normalize: bool = False, title: str = 'Confusion matrix',
-                          cmap: plt.cm = plt.cm.Greens) -> plt.figure:
+def plot_confusion_matrix(
+    cm: Union[Tensor, np.ndarray],
+    classes: List[str],
+    normalize: bool = False,
+    title: str = "Confusion matrix",
+    cmap: plt.cm = plt.cm.Greens,
+) -> plt.figure:
     r"""Plot confusion matrix.
 
     Args:
@@ -753,11 +753,10 @@ def plot_confusion_matrix(cm: Union[Tensor, np.ndarray], classes: List[str],
         plt.figure: plotted figure.
     """
     # Tensor to np.ndarray
-    _cm: np.ndarray = cm if not isinstance(cm, Tensor) \
-        else cm.cpu().numpy()
+    _cm: np.ndarray = cm if not isinstance(cm, Tensor) else cm.cpu().numpy()
 
     if normalize:
-        _cm = _cm.astype('float') / _cm.sum(axis=1)[:, np.newaxis]
+        _cm = _cm.astype("float") / _cm.sum(axis=1)[:, np.newaxis]
 
     # change font size
     plt.rcParams["font.size"] = 18
@@ -770,42 +769,43 @@ def plot_confusion_matrix(cm: Union[Tensor, np.ndarray], classes: List[str],
     plt.setp(axes, xticks=tick_marks, xticklabels=classes)
     plt.setp(axes, yticks=tick_marks, yticklabels=classes)
     # rotate xticklabels
-    plt.setp(axes.get_xticklabels(), rotation=45, ha='right', rotation_mode='anchor')
+    plt.setp(axes.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
     # title
-    plt.suptitle('Confusion Matrix')
+    plt.suptitle("Confusion Matrix")
 
     # label
-    axes.set_ylabel('True label')
-    axes.set_xlabel('Predicted label')
+    axes.set_ylabel("True label")
+    axes.set_xlabel("Predicted label")
 
     # grid
     # axes.grid(which='minor', color='b', linestyle='-', linewidth=3)
 
-    img = plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    img = plt.imshow(cm, interpolation="nearest", cmap=cmap)
 
     # adjust color bar
     divider = make_axes_locatable(axes)
-    cax = divider.append_axes('right', size='5%', pad=0.1)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
     fig.colorbar(img, cax=cax)
 
-    thresh = cm.max() / 2.
-    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.0
+    fmt = ".2f" if normalize else "d"
 
     # plot text
     for i, j in itertools.product(range(len(classes)), range(len(classes))):
-        clr = 'white' if cm[i, j] > thresh else 'black'
-        axes.text(j, i, format(cm[i, j], fmt), ha='center', va='center', color=clr)
+        clr = "white" if cm[i, j] > thresh else "black"
+        axes.text(j, i, format(cm[i, j], fmt), ha="center", va="center", color=clr)
 
     plt.tight_layout()
     fig = plt.gcf()
     return fig
-# end of [function] plot_confusion_matrix
 
 
-def calc_confusion_matrix(correct_labels: Union[Tensor, np.ndarray],
-                          predicted_labels: Union[Tensor, np.ndarray],
-                          class_num: int) -> Union[Tensor, np.ndarray]:
+def calc_confusion_matrix(
+    correct_labels: Union[Tensor, np.ndarray],
+    predicted_labels: Union[Tensor, np.ndarray],
+    class_num: int,
+) -> Union[Tensor, np.ndarray]:
     r"""Calculating confusion matrix.
 
     Args:
@@ -824,7 +824,6 @@ def calc_confusion_matrix(correct_labels: Union[Tensor, np.ndarray],
         cm[tl, pl] += 1
 
     return cm
-# end of [function] calc_confusion_matrix
 
 
 def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
@@ -839,7 +838,7 @@ def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
     channel_sum_squared = xp.zeros(CHANNEL_NUM)
 
     for key, data_list in dataset.all_list.items():
-        if key == 'known':
+        if key == "known":
             continue
 
         # for i, data in enumerate(data_list):
@@ -851,7 +850,7 @@ def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
 
             img = xp.asarray(img_pil)
             img = img / 255
-            pixel_num += (img.size / CHANNEL_NUM)
+            pixel_num += img.size / CHANNEL_NUM
             channel_sum += xp.sum(img, axis=(0, 1))
             channel_sum_squared += xp.sum(xp.square(img), axis=(0, 1))
 

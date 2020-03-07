@@ -11,8 +11,7 @@ from tqdm import tqdm
 
 # my packages
 import cnn
-from grad_cam_impl import (BackPropagation, Deconvnet, GradCAM,
-                           GuidedBackPropagation)
+from grad_cam_impl import BackPropagation, Deconvnet, GradCAM, GuidedBackPropagation
 
 
 def preprocess(image_path: str, input_size: tuple) -> Tuple[Tensor, Tensor]:
@@ -29,17 +28,20 @@ def preprocess(image_path: str, input_size: tuple) -> Tuple[Tensor, Tensor]:
     raw_image = cv2.imread(image_path)
     raw_image = cv2.resize(raw_image, input_size)
 
-    image = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])(raw_image[..., ::-1].copy())
+    image = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )(raw_image[..., ::-1].copy())
 
     return image, raw_image
-# end of [function] preprocess
 
 
-def load_images(image_paths: List[str], input_size: tuple = (60, 60)) \
-        -> Tuple[List[Tensor], List[Tensor]]:
+
+def load_images(
+    image_paths: List[str], input_size: tuple = (60, 60)
+) -> Tuple[List[Tensor], List[Tensor]]:
     r"""Load images.
 
     Returns:
@@ -54,7 +56,7 @@ def load_images(image_paths: List[str], input_size: tuple = (60, 60)) \
         images.append(image)
         raw_images.append(raw_image)
     return images, raw_images
-# end of [function] load_images
+
 
 
 def get_data_of_gradient(gradient: Tensor) -> Tensor:
@@ -73,11 +75,11 @@ def get_data_of_gradient(gradient: Tensor) -> Tensor:
 
     gradient = np.uint8(gradient)
     return gradient
-# end of [function] get_gradient_data
 
 
-def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor,
-                         paper_cmap: bool = False) -> Tensor:
+
+
+def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor, paper_cmap: bool = False) -> Tensor:
     r"""Returns Grad-CAM data.
 
     Args:
@@ -98,13 +100,15 @@ def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor,
 
     gcam = np.uint8(gcam)
     return gcam
-# end of [function] get_grad_cam_data
+
+
 
 
 @dataclass()
 class ExecuteGradCAM:
-    def __init__(self, classes: List[str], input_size: Tuple[int, int],
-                 target_layer: str, **options) -> None:
+    def __init__(
+        self, classes: List[str], input_size: Tuple[int, int], target_layer: str, **options
+    ) -> None:
         r"""
         Args:
             classes (List[str]): classes of model.
@@ -121,12 +125,12 @@ class ExecuteGradCAM:
         self.input_size = input_size
         self.target_layer = target_layer
 
-        self.is_vanilla = options.pop('is_vanilla', False)
-        self.is_deconv = options.pop('is_deconv', False)
-        self.is_grad_cam = options.pop('is_grad_cam', False)
+        self.is_vanilla = options.pop("is_vanilla", False)
+        self.is_deconv = options.pop("is_deconv", False)
+        self.is_grad_cam = options.pop("is_grad_cam", False)
 
         self.class_num = len(classes)
-    # end of [function] __init__
+
 
     @torch.enable_grad()  # enable gradient
     def main(self, model: cnn.Net, image_path: Union[tuple, list, str]) -> dict:
@@ -143,7 +147,7 @@ class ExecuteGradCAM:
         model.eval()  # switch to eval
 
         restore_device = next(model.parameters()).device
-        model.to(torch.device('cpu'))  # use only cpu
+        model.to(torch.device("cpu"))  # use only cpu
 
         ret = {}
 
@@ -161,7 +165,7 @@ class ExecuteGradCAM:
 
         model.to(restore_device)
         return ret
-    # end of [function] main
+
 
     def _execute_one_image(self, model: cnn.Net, image_path: str) -> dict:
         """Process one image.
@@ -171,15 +175,15 @@ class ExecuteGradCAM:
             image_path (str): path of image.
         """
         processed_data = {
-            'vanilla': [],  # Vanilla
-            'deconv': [],  # Deconv Net
-            'gbp': [],  # Guided Back Propagation
-            'gcam': [],  # Grad-CAM
-            'ggcam': [],  # Guided Grad-CAM
+            "vanilla": [],  # Vanilla
+            "deconv": [],  # Deconv Net
+            "gbp": [],  # Guided Back Propagation
+            "gcam": [],  # Grad-CAM
+            "ggcam": [],  # Guided Grad-CAM
         }
 
         # device = next(model.parameters()).device  # get device
-        device = torch.device('cpu')  # cpu only
+        device = torch.device("cpu")  # cpu only
 
         image, raw_image = preprocess(image_path, self.input_size)
         image = image.unsqueeze_(0).to(device)
@@ -208,9 +212,14 @@ class ExecuteGradCAM:
             gbp = GuidedBackPropagation(model=model)
             _ = gbp.forward(image)
 
-        pbar = tqdm(range(self.class_num), total=self.class_num, ncols=100,
-                    bar_format='{l_bar}{bar:30}{r_bar}', leave=False)
-        pbar.set_description('Grad-CAM')
+        pbar = tqdm(
+            range(self.class_num),
+            total=self.class_num,
+            ncols=100,
+            bar_format="{l_bar}{bar:30}{r_bar}",
+            leave=False,
+        )
+        pbar.set_description("Grad-CAM")
 
         for i in pbar:
             if self.is_vanilla:
@@ -219,7 +228,7 @@ class ExecuteGradCAM:
 
                 # append
                 data = get_data_of_gradient(gradients)
-                processed_data['vanilla'].append(data)
+                processed_data["vanilla"].append(data)
 
             if self.is_deconv:
                 deconv.backward(ids=ids[:, [i]])
@@ -227,7 +236,7 @@ class ExecuteGradCAM:
 
                 # append
                 data = get_data_of_gradient(gradients)
-                processed_data['deconv'].append(data)
+                processed_data["deconv"].append(data)
 
             # Grad-CAM / Guided Grad-CAM / Guided Backpropagation
             if self.is_grad_cam:
@@ -240,13 +249,13 @@ class ExecuteGradCAM:
 
                 # append
                 data = get_data_of_gradient(gradients[0])
-                processed_data['gbp'].append(data)
+                processed_data["gbp"].append(data)
 
                 data = get_data_of_grad_cam(regions[0, 0], raw_image[0])
-                processed_data['gcam'].append(data)
+                processed_data["gcam"].append(data)
 
                 data = get_data_of_gradient(torch.mul(regions, gradients)[0])
-                processed_data['ggcam'].append(data)
+                processed_data["ggcam"].append(data)
 
         # Remove all the hook function in the 'model'
         bp.remove_hook()
@@ -259,7 +268,7 @@ class ExecuteGradCAM:
             gbp.remove_hook()
 
         return processed_data
-    # end of [function] _execute_one_image
+
 
     def _execute_multi_images(self, model: cnn.Net, image_paths: List[str]) -> dict:
         r"""Process multiple images.
@@ -269,15 +278,15 @@ class ExecuteGradCAM:
             image_paths (List[str]): path of images.
         """
         processed_data = {
-            'vanilla': [],  # Vanilla
-            'deconv': [],  # Deconv Net
-            'gbp': [],  # Guided Back Propagation
-            'gcam': [],  # Grad-CAM
-            'ggcam': [],  # Guided Grad-CAM
+            "vanilla": [],  # Vanilla
+            "deconv": [],  # Deconv Net
+            "gbp": [],  # Guided Back Propagation
+            "gcam": [],  # Grad-CAM
+            "ggcam": [],  # Guided Grad-CAM
         }
 
         # device = next(model.parameters()).device  # get device
-        device = torch.device('cpu')  # only cpu
+        device = torch.device("cpu")  # only cpu
 
         images, raw_images = load_images(image_paths, self.input_size)
         images = torch.stack(images).to(device)
@@ -304,9 +313,14 @@ class ExecuteGradCAM:
             gbp = GuidedBackPropagation(model=model)
             _ = gbp.forward(images)
 
-        pbar = tqdm(range(self.class_num), total=self.class_num, ncols=100,
-                    bar_format='{l_bar}{bar:30}{r_bar}', leave=False)
-        pbar.set_description('Grad-CAM')
+        pbar = tqdm(
+            range(self.class_num),
+            total=self.class_num,
+            ncols=100,
+            bar_format="{l_bar}{bar:30}{r_bar}",
+            leave=False,
+        )
+        pbar.set_description("Grad-CAM")
 
         for i in pbar:
             if self.is_vanilla:
@@ -317,7 +331,7 @@ class ExecuteGradCAM:
                 for j in range(len(images)):
                     # append
                     data = get_data_of_gradient(gradients[j])
-                    processed_data['vanilla'].append(data)
+                    processed_data["vanilla"].append(data)
 
             if self.is_deconv:
                 deconv.backward(ids=ids[:, [i]])
@@ -326,7 +340,7 @@ class ExecuteGradCAM:
                 for j in range(len(images)):
                     # append
                     data = get_data_of_gradient(gradients[j])
-                    processed_data['deconv'].append(data)
+                    processed_data["deconv"].append(data)
 
             # Grad-CAM / Guided Grad-CAM / Guided Backpropagation
             if self.is_grad_cam:
@@ -340,13 +354,13 @@ class ExecuteGradCAM:
                 for j in range(len(images)):
                     # append
                     data = get_data_of_gradient(gradients[j])
-                    processed_data['gbp'].append(data)
+                    processed_data["gbp"].append(data)
 
                     data = get_data_of_grad_cam(regions[j, 0], raw_images[j])
-                    processed_data['gcam'].append(data)
+                    processed_data["gcam"].append(data)
 
                     data = get_data_of_gradient(torch.mul(regions, gradients)[j])
-                    processed_data['ggcam'].append(data)
+                    processed_data["ggcam"].append(data)
 
         # Remove all the hook function in the 'model'
         bp.remove_hook()
@@ -359,5 +373,3 @@ class ExecuteGradCAM:
             gbp.remove_hook()
 
         return processed_data
-    # end of [function] _execute_multi_images
-# end of [class] ExecuteGradCAM
