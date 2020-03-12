@@ -16,20 +16,21 @@ import torchvision
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from PIL import Image
 from sklearn.model_selection import train_test_split
-from torch import Tensor
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.utils import save_image
 from tqdm import tqdm
 
 # my packages
-import cnn
-import toml_settings as _tms
-import utils as ul
-from grad_cam import ExecuteGradCAM
+from . import cnn
+from . import toml_settings as _tms
+from . import utils as ul
+from .grad_cam import ExecuteGradCAM
 
 # quote package
-from radam_optim import radam
+from . import radam
+
+# import modules as M
 
 
 @dataclass
@@ -65,12 +66,6 @@ class CreateDataset(Dataset):
     limit_size: Optional[int] = None
 
     def __post_init__(self):
-        # self.path = path
-        # self.extensions = extensions
-        # self.test_size = test_size
-        # self.config_path = config_path
-        # self.limit_size = limit_size
-
         # {'train': [], 'unknown': [], 'known': []}
         self.all_list: Dict[str, List[Data]]
 
@@ -330,8 +325,8 @@ class Model:
 
             # batch process
             for batch_idx, items in enumerate(pbar):
-                imgs: Tensor
-                labels: Tensor
+                imgs: torch.Tensor
+                labels: torch.Tensor
                 paths: tuple  # if type is not [int, float...], not tensor but tuple.
 
                 imgs, labels, paths = items
@@ -507,8 +502,8 @@ class Model:
                 pbar.set_description("TEST[{}]".format(target.center(7)))
 
                 for batch_idx, items in enumerate(pbar):
-                    img_data: Tensor
-                    label: Tensor
+                    img_data: torch.Tensor
+                    label: torch.Tensor
                     path: tuple
 
                     # img_data, label, path
@@ -619,12 +614,11 @@ class Model:
             criterion: `CrossEntropyLoss`
         """
         # network
-        params = dict(
+        self.net = cnn.Net(
             input_size=self.tms.input_size,
             classify_size=self.classify_size,
-            in_channels=self.tms.channels,
+            in_channels=self.tms.channels
         )
-        self.net = cnn.Net(**params)
 
         options = dict(lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
         # self.optimizer = optim.Adam(self.net.parameters(), **options)  # Adam
@@ -734,7 +728,7 @@ def add_to_tensorboard(
 
 
 def plot_confusion_matrix(
-    cm: Union[Tensor, np.ndarray],
+    cm: Union[torch.Tensor, np.ndarray],
     classes: List[str],
     normalize: bool = False,
     title: str = "Confusion matrix",
@@ -753,7 +747,7 @@ def plot_confusion_matrix(
         plt.figure: plotted figure.
     """
     # Tensor to np.ndarray
-    _cm: np.ndarray = cm if not isinstance(cm, Tensor) else cm.cpu().numpy()
+    _cm: np.ndarray = cm if not isinstance(cm, torch.Tensor) else cm.cpu().numpy()
 
     if normalize:
         _cm = _cm.astype("float") / _cm.sum(axis=1)[:, np.newaxis]
@@ -802,10 +796,10 @@ def plot_confusion_matrix(
 
 
 def calc_confusion_matrix(
-    correct_labels: Union[Tensor, np.ndarray],
-    predicted_labels: Union[Tensor, np.ndarray],
+    correct_labels: Union[torch.Tensor, np.ndarray],
+    predicted_labels: Union[torch.Tensor, np.ndarray],
     class_num: int,
-) -> Union[Tensor, np.ndarray]:
+) -> Union[torch.Tensor, np.ndarray]:
     r"""Calculating confusion matrix.
 
     Args:
@@ -864,7 +858,7 @@ def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
     return tuple(rgb_mean), tuple(rgb_std)
 
 
-def make_grid_and_plot(imgs: Tensor) -> None:
+def make_grid_and_plot(imgs: torch.Tensor) -> None:
     imgs = torchvision.utils.make_grid(imgs)
     imgs = imgs / 2 + 0.5
     np_imgs = imgs.cpu().numpy()

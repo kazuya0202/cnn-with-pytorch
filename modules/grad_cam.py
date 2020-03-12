@@ -10,8 +10,8 @@ from torchvision import transforms
 from tqdm import tqdm
 
 # my packages
-import cnn
-from grad_cam_impl import BackPropagation, Deconvnet, GradCAM, GuidedBackPropagation
+from . import cnn
+from .grad_cam_impl import BackPropagation, Deconvnet, GradCAM, GuidedBackPropagation
 
 
 def preprocess(image_path: str, input_size: tuple) -> Tuple[Tensor, Tensor]:
@@ -38,7 +38,6 @@ def preprocess(image_path: str, input_size: tuple) -> Tuple[Tensor, Tensor]:
     return image, raw_image
 
 
-
 def load_images(
     image_paths: List[str], input_size: tuple = (60, 60)
 ) -> Tuple[List[Tensor], List[Tensor]]:
@@ -58,7 +57,6 @@ def load_images(
     return images, raw_images
 
 
-
 def get_data_of_gradient(gradient: Tensor) -> Tensor:
     r"""Returns gradient data.
 
@@ -75,8 +73,6 @@ def get_data_of_gradient(gradient: Tensor) -> Tensor:
 
     gradient = np.uint8(gradient)
     return gradient
-
-
 
 
 def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor, paper_cmap: bool = False) -> Tensor:
@@ -100,8 +96,6 @@ def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor, paper_cmap: bool = Fal
 
     gcam = np.uint8(gcam)
     return gcam
-
-
 
 
 @dataclass()
@@ -130,7 +124,6 @@ class ExecuteGradCAM:
         self.is_grad_cam = options.pop("is_grad_cam", False)
 
         self.class_num = len(classes)
-
 
     @torch.enable_grad()  # enable gradient
     def main(self, model: cnn.Net, image_path: Union[tuple, list, str]) -> dict:
@@ -165,7 +158,6 @@ class ExecuteGradCAM:
 
         model.to(restore_device)
         return ret
-
 
     def _execute_one_image(self, model: cnn.Net, image_path: str) -> dict:
         """Process one image.
@@ -268,7 +260,6 @@ class ExecuteGradCAM:
             gbp.remove_hook()
 
         return processed_data
-
 
     def _execute_multi_images(self, model: cnn.Net, image_paths: List[str]) -> dict:
         r"""Process multiple images.

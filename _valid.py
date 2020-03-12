@@ -3,13 +3,12 @@ import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+from typing import Iterator, Tuple
 
 import torch
 import torch.nn.functional as F
 import torchvision.transforms as transforms
 from PIL import Image
-from torch import Tensor
 
 # my package
 import cnn
@@ -42,7 +41,7 @@ class ValidModel:
     load_pth_path: str
     use_gpu: bool = True
     in_channels: int = 3
-    input_size: tuple = (60, 60)
+    input_size: Tuple[int, int] = (60, 60)
     transform: transforms = None
 
     def __post_init__(self):
@@ -91,12 +90,11 @@ class ValidModel:
         self.classify_size = len(self.classes)
 
         # network
-        options = dict(
+        self.net = cnn.Net(
             input_size=self.input_size,
             classify_size=self.classify_size,
             in_channels=self.in_channels,
         )
-        self.net = cnn.Net(**options)
         self.net.load_state_dict(checkpoint["model_state_dict"])
 
         self.net.to(self.device)  # switch to GPU / CPU
@@ -125,7 +123,7 @@ class ValidModel:
             img = self.preprocess(image_path)
 
             # input to model
-            x: Tensor = self.net(img)
+            x: torch.Tensor = self.net(img)
             # pred = torch.max(x.data, 1)[1].cpu().numpy()
 
             x_sm = F.softmax(x, -1)
