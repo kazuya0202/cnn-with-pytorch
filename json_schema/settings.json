@@ -1,0 +1,43 @@
+{
+    "datasetPath": "",
+
+    "height": 60,
+    "width": 60,
+    "limitSizeEachClass": -1,
+    "testSize": 0.1,
+    "extensions": ["jpg", "png", "jpeg"],
+    "channels": 3,
+
+    "epoch": 10,
+    "batch": 128,
+    "subdivision": 4,
+    "saveCycle": 0,
+    "testCycle": 1,
+    "useGpu": true,
+    "saveFinalModel": true,
+    "shuffleDatasetPerEpoch": true,
+
+    "isExecuteGradCam": true,
+    "gradCamLayer": "conv5",
+    "isExecuteGradCamWhenOnlyMistake": true,
+
+    "destinations": {
+        "false": "./false",
+        "trainedModel": "./",
+        "config": "./config",
+        "log": "./logs",
+        "gradCam": "./GradCAM_results"
+    },
+
+    "reTraining": {
+        "isAvailableReTraining": false,
+        "isReTrainingModel": false,
+        "loadModelPath": ""
+    },
+
+    "options": {
+        "isShowNetworkDifinition": true,
+        "isSaveDebugLog": true,
+        "isSaveRateLog": true
+    }
+}

@@ -114,7 +114,7 @@ class TomlSettings:
 
                 has_backslash = False if not isinstance(v, str) else v.find("\\") > -1
 
-                # if k.find('path') > -1 or k.find('\\') > -1:
+                # if k.find('path') > -1 or v.find('\\') > -1:
                 if k.find("path") > -1 or has_backslash:
                     ss = 'self.{} = r"{}"'
 
