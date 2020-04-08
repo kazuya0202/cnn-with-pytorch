@@ -18,6 +18,9 @@ def parse_argument() -> Namespace:
     return parser.parse_args()
 
 
+# m20044
+# kiho160511
+
 def main() -> int:
     r"""Main process.
 
