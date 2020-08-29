@@ -1,7 +1,7 @@
 import itertools
 import random
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -17,7 +17,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
-from torchvision import transforms
+# from torchvision import transforms
 from torchvision.utils import save_image
 from tqdm import tqdm
 
@@ -151,13 +151,13 @@ class CreateDataset(Dataset):
         _inner_execute("known_used_images.txt", "known")
 
     def create_dataloader(
-        self, batch_size: int = 64, transform: transforms = None, is_shuffle: bool = True
+        self, batch_size: int = 64, transform: Any = None, is_shuffle: bool = True
     ) -> Dict[str, DataLoader]:
         r"""Create DataLoader instance of `train`, `unknown`, `known` dataset.
 
         Args:
             batch_size (int, optional): batch size. Defaults to 64.
-            transform (transforms, optional): transform. Defaults to None.
+            transform (Any, optional): transform. Defaults to None.
             is_shuffle (bool, optional): shuffle. Defaults to True.
 
         Returns:
@@ -187,7 +187,10 @@ class CustomDataset(Dataset):
         transform (transforms, optional): transform of tensor. Defaults to None.
     """
     target_list: List[Data]
-    transform: transforms = None
+    # transform: transforms = None
+    transform: Any = None
+
+    list_size: int = field(init=False)
 
     def __post_init__(self):
         self.list_size = len(self.target_list)
@@ -555,7 +558,8 @@ class Model:
                             ss += f"_pred[{predicted}]_correct[{label_ans}].png"
                             _path = base_dir.joinpath(ss)
 
-                            cv2.imwrite(str(_path), img_data)  # save
+                            # save
+                            cv2.imwrite(str(_path), img_data)  # type: ignore
 
                             # for debug
                             # plt.imshow(img_data)
@@ -709,13 +713,13 @@ class Model:
 
 
 def add_to_tensorboard(
-    writer: tbx.SummaryWriter, fig: plt.figure, title: str, step: int = 0
+    writer: tbx.SummaryWriter, fig: plt.Figure, title: str, step: int = 0
 ) -> None:
     r"""Add plot image to TensorBoard.
 
     Args:
         writer (tbx.SummaryWriter): tensorboard writer.
-        fig (plt.figure): plot figure.
+        fig (plt.Figure): plot figure.
         title (str): title of plotted figure.
         step (int, optional): step. Defaults to 0.
     """
@@ -732,8 +736,8 @@ def plot_confusion_matrix(
     classes: List[str],
     normalize: bool = False,
     title: str = "Confusion matrix",
-    cmap: plt.cm = plt.cm.Greens,
-) -> plt.figure:
+    cmap: plt.cm = plt.cm.Greens,  # type: ignore
+) -> plt.Figure:
     r"""Plot confusion matrix.
 
     Args:
@@ -744,7 +748,7 @@ def plot_confusion_matrix(
         cmap (plt.cm, optional): using color map. Defaults to plt.cm.Greens.
 
     Returns:
-        plt.figure: plotted figure.
+        plt.Figure: plotted figure.
     """
     # Tensor to np.ndarray
     _cm: np.ndarray = cm if not isinstance(cm, torch.Tensor) else cm.cpu().numpy()
@@ -825,7 +829,7 @@ def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
     CHANNEL_NUM = channels
 
     # xp: Union[np, cupy] = cupy if torch.cuda.is_available() else np
-    xp: np = np
+    xp = np
 
     pixel_num = 0  # store all pixel number in the dataset
     channel_sum = xp.zeros(CHANNEL_NUM)
@@ -842,14 +846,14 @@ def calc_dataset_norm(dataset: CreateDataset, channels: int = 3):
             # img = cv2.resize(img, (60, 60))
             img_pil = Image.open(data.path).resize((60, 60))
 
-            img = xp.asarray(img_pil)
+            img = xp.asarray(img_pil)  # type: ignore
             img = img / 255
             pixel_num += img.size / CHANNEL_NUM
             channel_sum += xp.sum(img, axis=(0, 1))
-            channel_sum_squared += xp.sum(xp.square(img), axis=(0, 1))
+            channel_sum_squared += xp.sum(xp.square(img), axis=(0, 1))  # type: ignore
 
     bgr_mean = channel_sum / pixel_num
-    bgr_std = xp.sqrt(channel_sum_squared / pixel_num - xp.square(bgr_mean))
+    bgr_std = xp.sqrt(channel_sum_squared / pixel_num - xp.square(bgr_mean))  # type: ignore
 
     # change the format from bgr to rgb
     rgb_mean = list(bgr_mean)[::-1]

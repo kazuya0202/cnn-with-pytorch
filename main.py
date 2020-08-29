@@ -4,11 +4,17 @@ from typing import Any, Dict
 
 import torch
 import torchvision.transforms as transforms
+import yaml
 
 # my packages
 import modules.toml_settings as _tms
 import modules.utils as ul
 import modules.torch_utils as tu
+from modules import GlobalConfig, factory_config
+
+
+# global variable
+GCONF: GlobalConfig
 
 
 def parse_argument() -> Namespace:
@@ -16,6 +22,16 @@ def parse_argument() -> Namespace:
     parser.add_argument("-p", "--path", help="path of `user_settings.toml`.", default=None)
 
     return parser.parse_args()
+
+
+def preprocess() -> None:
+    args = parse_argument()
+    yaml_path = args.path
+    if yaml_path is not None:
+        print(f"Set `yaml_path` to {yaml_path}")
+
+    global GCONF
+    GCONF = factory_config(yaml_path)
 
 
 def main() -> int:
@@ -27,6 +43,8 @@ def main() -> int:
     Returns:
         int: exit status.
     """
+    # load config.
+    preprocess()
 
     # determine toml path
     args = parse_argument()

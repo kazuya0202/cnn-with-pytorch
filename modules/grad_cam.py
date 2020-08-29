@@ -25,8 +25,8 @@ def preprocess(image_path: str, input_size: tuple) -> Tuple[Tensor, Tensor]:
         Tuple: image data.
     """
 
-    raw_image = cv2.imread(image_path)
-    raw_image = cv2.resize(raw_image, input_size)
+    raw_image = cv2.imread(image_path)  # type: ignore
+    raw_image = cv2.resize(raw_image, input_size)  # type: ignore
 
     image = transforms.Compose(
         [
@@ -71,7 +71,7 @@ def get_data_of_gradient(gradient: Tensor) -> Tensor:
     gradient /= gradient.max()
     gradient *= 255.0
 
-    gradient = np.uint8(gradient)
+    gradient = np.uint8(gradient)  # type: ignore
     return gradient
 
 
@@ -87,14 +87,14 @@ def get_data_of_grad_cam(gcam: Tensor, raw_image: Tensor, paper_cmap: bool = Fal
         Tensor: [description]
     """
     gcam = gcam.cpu().numpy()
-    cmap = cm.jet_r(gcam)[..., :3] * 255.0
+    cmap = cm.jet_r(gcam)[..., :3] * 255.0  # type: ignore
     if paper_cmap:
         alpha = gcam[..., None]
         gcam = alpha * cmap + (torch.tensor(1) - alpha) * raw_image
     else:
         gcam = (cmap.astype(np.float) + raw_image.clone().cpu().numpy().astype(np.float)) / 2
 
-    gcam = np.uint8(gcam)
+    gcam = np.uint8(gcam)  # type: ignore
     return gcam
 
 

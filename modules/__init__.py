@@ -17,6 +17,11 @@ from .toml_settings import (
     TomlSettings,
 )
 
+from .yaml_parser import (
+    GlobalConfig,
+    factory_config,
+)
+
 from .torch_utils import (
     Model,
     CustomDataset,
