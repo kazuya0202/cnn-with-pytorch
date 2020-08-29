@@ -3,7 +3,7 @@ import random
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 import cv2
 import matplotlib.pyplot as plt
@@ -17,18 +17,15 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader, Dataset
-# from torchvision import transforms
 from torchvision.utils import save_image
 from tqdm import tqdm
 
+from modules.yaml_parser import GlobalConfig
+
 # my packages
-from . import cnn
-from . import toml_settings as _tms
+from . import cnn, radam
 from . import utils as ul
 from .grad_cam import ExecuteGradCAM
-
-# quote package
-from . import radam
 
 # import modules as M
 
@@ -59,11 +56,7 @@ class CreateDataset(Dataset):
         test_size (Union[float, int]): test image size.
         config_path (str, optional): export path of config. Defaults to 'config'.
     """
-    path: str
-    extensions: list
-    test_size: Union[float, int]
-    config_path: str = "config"
-    limit_size: Optional[int] = None
+    GCONF: GlobalConfig
 
     def __post_init__(self):
         # {'train': [], 'unknown': [], 'known': []}
@@ -90,7 +83,7 @@ class CreateDataset(Dataset):
         self.all_list = {"train": [], "unknown": [], "known": []}
         self.classes = {}
 
-        path = Path(self.path)
+        path = Path(self.GCONF.path.dataset)
 
         # directories in [image_path]
         dirs = [d for d in path.glob("*") if d.is_dir()]
@@ -99,7 +92,8 @@ class CreateDataset(Dataset):
         for label_idx, _dir in enumerate(dirs):
             xs = []
 
-            for ext in self.extensions:
+            # for ext in self.extensions:
+            for ext in self.GCONF.dataset.extensions:
                 tmp = [
                     Data(x.as_posix(), label_idx, _dir.name)
                     for x in _dir.glob(f"*.{ext}")
@@ -108,12 +102,13 @@ class CreateDataset(Dataset):
                 xs.extend(tmp)
 
             # adjust to limit size
-            if self.limit_size is not None:
+            # if self.limit_size is not None:
+            if self.GCONF.dataset.limit_size is not None:
                 random.shuffle(xs)
-                xs = xs[: self.limit_size]
+                xs = xs[: self.GCONF.dataset.limit_size]
 
             # split dataset
-            train, test = train_test_split(xs, test_size=self.test_size, shuffle=True)
+            train, test = train_test_split(xs, test_size=self.GCONF.dataset.test_size, shuffle=True)
 
             self.all_list["train"].extend(train)
             self.all_list["unknown"].extend(test)
@@ -130,7 +125,7 @@ class CreateDataset(Dataset):
     def _write_config(self) -> None:
         r"""Writing configs."""
 
-        _dir = Path(self.config_path)
+        _dir = Path(self.GCONF.path.config)
         _dir.mkdir(parents=True, exist_ok=True)
 
         def _inner_execute(add_path: str, target: str):
@@ -187,7 +182,6 @@ class CustomDataset(Dataset):
         transform (transforms, optional): transform of tensor. Defaults to None.
     """
     target_list: List[Data]
-    # transform: transforms = None
     transform: Any = None
 
     list_size: int = field(init=False)
@@ -225,15 +219,7 @@ class CustomDataset(Dataset):
 
 @dataclass
 class Model:
-    def __init__(
-        self, classes: Dict[int, str], loader: Any, tms: _tms.TomlSettings, **options,
-    ) -> None:
-        r"""
-        **options
-            log (ul.LogFile): Defaults to ul.LogFile().
-            rate (ul.LogFile): Defaults to ul.LogFile().
-        """
-
+    def __init__(self, classes: Dict[int, str], loader: Any, GCONF: GlobalConfig,) -> None:
         self.train_loader: DataLoader = loader.pop("train", None)
         self.unknown_loader: DataLoader = loader.pop("unknown", None)
         self.known_loader: DataLoader = loader.pop("known", None)
@@ -243,16 +229,12 @@ class Model:
         self.optimizer: _optim_t
         self.criterion: nn.CrossEntropyLoss
 
-        self.tms = tms  # toml settings
-        self.max_epoch = tms.epoch
+        self.GCONF = GCONF
+        self.max_epoch = GCONF.network.epoch
 
         # gpu setting
-        use_gpu = torch.cuda.is_available() and tms.use_gpu
+        use_gpu = torch.cuda.is_available() and GCONF.network.gpu_enabled
         self.device = torch.device("cuda" if use_gpu else "cpu")
-
-        # options
-        self.log: ul.LogFile = options.pop("log", ul.LogFile())
-        self.rate: ul.LogFile = options.pop("rate", ul.LogFile())
 
         self.current_epoch: int
 
@@ -264,14 +246,17 @@ class Model:
 
         # Grad-CAM setting
         self.egc = ExecuteGradCAM(
-            list(self.classes.values()), tms.input_size, tms.grad_cam_layer, is_grad_cam=True
+            list(self.classes.values()),
+            GCONF.network.input_size,
+            GCONF.gradcam.layer,
+            is_grad_cam=GCONF.gradcam.enabled,
         )
 
         # -----
 
         # re-training
-        if tms.is_load_model:
-            self._load(tms.load_pth_path)
+        if GCONF.option.re_training:
+            self._load(GCONF.option.load_model_path)
             self.max_epoch -= self.current_epoch  # 0 ~ (max_epoch-current_epoch) times.
         else:
             self._build()  # build model
@@ -279,19 +264,19 @@ class Model:
         self._write_classes()  # save classes
 
         # for making false path
-        base = Path(self.tms.false_path, self.tms.filename_base)
+        base = Path(GCONF.path.mistaken, GCONF.filename_base)
         self.false_paths = [base.joinpath(f"epoch{ep}") for ep in range(self.max_epoch)]
         ul.make_directories(*self.false_paths)
 
-        if self.tms.pth_save_cycle != 0:
-            self.pth_save_path = f"{self.tms.pth_save_path}/{self.tms.filename_base}"
+        if self.GCONF.network.save_cycle != 0:
+            self.pth_save_path = f"{GCONF.path.model}/{GCONF.filename_base}"
             ul.make_directories(self.pth_save_path)
 
     def train(self):
         r"""Training model."""
 
-        test_schedule = self._create_schedule(self.tms.test_cycle)
-        pth_save_schedule = self._create_schedule(self.tms.pth_save_cycle)
+        test_schedule = self._create_schedule(self.GCONF.network.test_cycle)
+        pth_save_schedule = self._create_schedule(self.GCONF.network.save_cycle)
 
         # for making confusion matrix
         all_label = torch.tensor([], dtype=torch.long)
@@ -300,11 +285,11 @@ class Model:
         # switch to train
         self.net.train()
 
-        self.log.writeline("# Start training.", False)
+        self.GCONF.log.writeline("# Start training.", False)
         plot_point = 0  # for tensorboard
 
         # [optimizer, epoch]
-        save_option = [True, True] if self.tms.is_available_re_training else [False, False]
+        save_option = [True, True] if self.GCONF.option.is_available_re_training else [False, False]
 
         # loop epoch
         for epoch in range(self.max_epoch):
@@ -313,9 +298,9 @@ class Model:
             total_loss = 0  # total loss
             total_acc = 0  # total accuracy
 
-            self.log.writeline(f"----- Epoch: {epoch + 1} -----", debug_ok=True)
+            self.GCONF.log.writeline(f"----- Epoch: {epoch + 1} -----", debug_ok=True)
 
-            subdivision = self.tms.subdivision
+            subdivision = self.GCONF.network.subdivision
 
             # batch in one epoch (outer tqdm)
             pbar = tqdm(
@@ -414,7 +399,7 @@ class Model:
                 ss += f"\n  -> ans   : {label_ans}"
                 ss += f"\n  -> result: {predicted}"
 
-                self.log.writeline(ss, debug_ok=False)
+                self.GCONF.log.writeline(ss, debug_ok=False)
 
                 # break
                 # end of this batch
@@ -430,10 +415,10 @@ class Model:
             total_acc = total_acc / size
 
             # for log
-            self.log.writeline("\n---------------")
-            self.log.writeline(f"Total loss: {total_loss}")
-            self.log.writeline(f"Total acc: {total_acc}")
-            self.log.writeline("---------------\n")
+            self.GCONF.log.writeline("\n---------------")
+            self.GCONF.log.writeline(f"Total loss: {total_loss}")
+            self.GCONF.log.writeline(f"Total acc: {total_acc}")
+            self.GCONF.log.writeline("---------------\n")
 
             # for tqdm
             print(f"  Total loss: {total_loss}")
@@ -458,7 +443,7 @@ class Model:
                 progress.complete()
 
                 # log
-                self.log.writeline(f"# Saved model to '{save_path}'")
+                self.GCONF.log.writeline(f"# Saved model to '{save_path}'")
 
             # break
             # end of this epoch
@@ -472,11 +457,11 @@ class Model:
     def test(self):
         r"""Testing model."""
         # log
-        self.log.writeline("# Start testing.\n", False)
+        self.GCONF.log.writeline("# Start testing.\n", False)
 
         # ss = ul.set_align_center(str(self.current_epoch)) + ' | '
         # self.rate.write(ss)
-        self.rate.write(self.current_epoch)
+        self.GCONF.rate.write(self.current_epoch)
 
         def _inner_execute(data_loader: DataLoader, target: str = "unknown"):
             """ Execute unknown or known dataset.
@@ -535,7 +520,7 @@ class Model:
 
                     # mistake
                     # do not Grad-CAM -> continue
-                    if not self.tms.is_grad_cam:
+                    if not self.GCONF.gradcam.enabled:
                         continue
 
                     # Grad-CAM [@torch.enable_grad()]
@@ -543,8 +528,8 @@ class Model:
 
                     # base path
                     base_dir = Path(
-                        self.tms.grad_cam_path,
-                        self.tms.filename_base,
+                        self.GCONF.path.gradcam,
+                        self.GCONF.filename_base,
                         "false",
                         target,
                         f"epoch_{self.current_epoch}",
@@ -566,7 +551,7 @@ class Model:
                             # plt.pause(0.1)
                     # end of this batch
 
-                self.log.writeline()
+                self.GCONF.log.writeline()
 
                 # calc each accuracy
                 for k, _cls in self.classes.items():
@@ -577,22 +562,20 @@ class Model:
 
                     ss = "%-12s -> " % f"[{_cls}]"
                     ss += f"acc: {acc:<.4f} ({acc_num} / {all_num} images.)"
-                    self.log.writeline(ss)
+                    self.GCONF.log.writeline(ss)
                     print(f"  {ss}")
 
                     # rate log
-                    # ss = ul.set_align_ljust(str(acc), align=15)
-                    # self.rate.write(ss)
-                    self.rate.write(f", {acc}")
+                    self.GCONF.rate.write(f", {acc}")
 
                     # end of calculate accuracy of each class and total
 
-                self.log.writeline()
+                self.GCONF.log.writeline()
 
                 # total accuracy
                 total_acc /= len(self.classes)
-                self.log.writeline(f"Total acc: {total_acc}\n")
-                self.rate.write(f", {total_acc}")
+                self.GCONF.log.writeline(f"Total acc: {total_acc}\n")
+                self.GCONF.rate.write(f", {total_acc}")
 
                 # for tqdm
                 print(f"  Total acc: {total_acc}\n")
@@ -604,11 +587,9 @@ class Model:
         if self.known_loader is not None:
             _inner_execute(self.known_loader, "known")
         else:
-            # spacing
-            # self.rate.write(' ' * 15)
-            self.rate.write(", -" * len(self.classes))
+            self.GCONF.rate.write(", -" * len(self.classes))
 
-        self.rate.writeline()
+        self.GCONF.rate.writeline()
 
     def _build(self):
         r"""Building model.
@@ -617,12 +598,12 @@ class Model:
             optimizer: `RAdam`
             criterion: `CrossEntropyLoss`
         """
+        # initialize network parameters
+        cnn.input_size = self.GCONF.network.input_size
+        cnn.classify_size = self.classify_size
+        cnn.in_channels = self.GCONF.network.channels
         # network
-        self.net = cnn.Net(
-            input_size=self.tms.input_size,
-            classify_size=self.classify_size,
-            in_channels=self.tms.channels
-        )
+        self.net = cnn.Net()
 
         options = dict(lr=1e-3, betas=(0.9, 0.999), eps=1e-8)
         # self.optimizer = optim.Adam(self.net.parameters(), **options)  # Adam
@@ -682,7 +663,7 @@ class Model:
 
     def _write_classes(self) -> None:
         r"""Writing classes of dataset."""
-        path = Path(self.tms.config_path, "classes.txt")
+        path = Path(self.GCONF.path.config, "classes.txt")
         file_ = ul.LogFile(path, std_debug_ok=False, _clear=True)
 
         path.parent.mkdir(parents=True, exist_ok=True)

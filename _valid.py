@@ -3,7 +3,7 @@ import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator, Tuple
+from typing import Any, Iterator, Tuple
 
 import torch
 import torch.nn.functional as F
@@ -42,7 +42,7 @@ class ValidModel:
     use_gpu: bool = True
     in_channels: int = 3
     input_size: Tuple[int, int] = (60, 60)
-    transform: transforms = None
+    transform: Any = None
 
     def __post_init__(self):
         r"""

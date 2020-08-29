@@ -1,6 +1,7 @@
 recognition_datasets/**/*
 runs/
 config/
+mistaken/
 
 ### Python
 
@@ -133,5 +134,3 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-
-test/

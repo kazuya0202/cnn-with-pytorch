@@ -32,3 +32,7 @@ from .torch_utils import (
     add_to_tensorboard,
     make_grid_and_plot,
 )
+
+from .global_variable import (
+    GCONF,
+)

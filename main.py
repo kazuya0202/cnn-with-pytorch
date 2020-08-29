@@ -1,20 +1,17 @@
+from modules.yaml_parser import GlobalConfig
 import sys
 from argparse import ArgumentParser, Namespace
 from typing import Any, Dict
 
 import torch
 import torchvision.transforms as transforms
-import yaml
 
 # my packages
-import modules.toml_settings as _tms
 import modules.utils as ul
 import modules.torch_utils as tu
-from modules import GlobalConfig, factory_config
+from modules import factory_config
 
-
-# global variable
-GCONF: GlobalConfig
+# import modules as m
 
 
 def parse_argument() -> Namespace:
@@ -24,14 +21,13 @@ def parse_argument() -> Namespace:
     return parser.parse_args()
 
 
-def preprocess() -> None:
+def preprocess() -> GlobalConfig:
     args = parse_argument()
     yaml_path = args.path
     if yaml_path is not None:
         print(f"Set `yaml_path` to {yaml_path}")
 
-    global GCONF
-    GCONF = factory_config(yaml_path)
+    return factory_config(yaml_path)
 
 
 def main() -> int:
@@ -44,51 +40,35 @@ def main() -> int:
         int: exit status.
     """
     # load config.
-    preprocess()
-
-    # determine toml path
-    args = parse_argument()
-    toml_path = args.path
-    if toml_path is not None:
-        print(f"Set `toml_path` to {toml_path}")
-
-    # factory toml settings
-    tms = _tms.factory(toml_path)
+    GCONF = preprocess()
 
     """ DEBUG NOW """
-    tms.is_save_debug_log = False
-    tms.is_save_rate_log = False
+    GCONF.option.is_save_debug_log = False
+    GCONF.option.is_save_rate_log = False
     """ --------- """
 
     # # if not exist, raise error
-    ul.raise_when_FileNotFound(tms.dataset_path)
+    ul.raise_when_FileNotFound(GCONF.path.dataset)
 
     # ===== log / rate file =====
-    log = ul.LogFile(std_debug_ok=False)
-    rate = ul.LogFile(std_debug_ok=False)
+    GCONF.log = ul.LogFile(std_debug_ok=False)
+    GCONF.rate = ul.LogFile(std_debug_ok=False)
 
     # debug log
-    if tms.is_save_debug_log:
-        p = ul.create_file_path(tms.log_path, tms.filename_base)
-        log = ul.LogFile(p, std_debug_ok=False)
+    if GCONF.option.is_save_debug_log:
+        p = ul.create_file_path(GCONF.path.log, GCONF.filename_base)
+        GCONF.log = ul.LogFile(p, std_debug_ok=False)
 
     # rate log
-    if tms.is_save_rate_log:
-        p = ul.create_file_path(tms.log_path, tms.filename_base, ext="csv")
-        rate = ul.LogFile(p, std_debug_ok=False)
+    if GCONF.option.is_save_rate_log:
+        p = ul.create_file_path(GCONF.path.log, GCONF.filename_base, ext="csv")
+        GCONF.rate = ul.LogFile(p, std_debug_ok=False)
 
     # ===== datasets =====
-    progress = ul.ProgressLog(f"Create dataset from '{tms.dataset_path}'")
-
+    # progress = ul.ProgressLog(f"Create dataset from '{GCONF.path.dataset}'")
+    print(f"Create dataset from '{GCONF.path.dataset}'...")
     # train, unknown, known
-    dataset = tu.CreateDataset(
-        path=tms.dataset_path,
-        extensions=tms.extensions,
-        test_size=tms.test_size,
-        config_path=tms.config_path,
-        limit_size=tms.limit_dataset_size,
-    )
-    progress.complete()
+    dataset = tu.CreateDataset(GCONF=GCONF)
 
     # ===== calculate dataset normalization =====
     # progress = ul.ProgressLog('Calculating dataset normalization')
@@ -96,7 +76,7 @@ def main() -> int:
     # import time
     # st = time.time()
     # print(time.time() - st)
-    # mean, std = tu.calc_dataset_norm(dataset, tms.channels)
+    # mean, std = tu.calc_dataset_norm(dataset, GCONF.network.channels)
     # print(f'mean: {mean}')
     # print(f'std : {std}')
 
@@ -105,7 +85,7 @@ def main() -> int:
     # transform
     transform = transforms.Compose(
         [
-            transforms.Resize(tms.input_size),
+            transforms.Resize(GCONF.network.input_size),
             transforms.ToTensor(),
             # transforms.Normalize(mean=mean, std=std),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
@@ -113,73 +93,67 @@ def main() -> int:
     )
 
     # loader = {'train': [...], 'unknown': [...], 'known': [...]}
-    loader = dataset.create_dataloader(tms.batch, transform, tms.is_shuffle_per_epoch)
+    loader = dataset.create_dataloader(
+        GCONF.network.batch, transform, GCONF.network.is_shuffle_dataset_per_epoch
+    )
 
     # make directories
-    pth_save_path = tms.pth_save_path if tms.is_save_final_pth else None
+    pth_save_path = GCONF.path.model if GCONF.network.is_save_final_model else None
 
-    is_save_log = tms.is_save_debug_log or tms.is_save_rate_log
-    log_path = tms.log_path if is_save_log else None
+    is_save_log = GCONF.option.is_save_debug_log or GCONF.option.is_save_rate_log
+    log_path = GCONF.path.log if is_save_log else None
 
     ul.make_directories(
-        tms.false_path, log_path, pth_save_path,
+        GCONF.path.mistaken, log_path, pth_save_path,
     )
 
     # rate log
     cls_list = dataset.classes.values()
     _ = ", " * len(cls_list)
-    rate.writeline(f", unknown {_}, known {_}")
+    GCONF.rate.writeline(f", unknown {_}, known {_}")
     _ = ", ".join(cls_list)
-    rate.writeline(f"Test No, {_}, TOTAL, {_}, TOTAL")
+    GCONF.rate.writeline(f"Test No, {_}, TOTAL, {_}, TOTAL")
 
     # ===== network =====
-    progress = ul.ProgressLog("Building CNN network")  # debug log
-
+    # progress = ul.ProgressLog("Building CNN network")  # debug log
+    print("Building CNN network...")
     # build network
-    model = tu.Model(
-        classes=dataset.classes,
-        loader=loader,
-        tms=tms,
-        use_gpu=tms.use_gpu,
-        log=log,  # **options
-        rate=rate,  # **options
-    )
-
-    progress.complete()
+    model = tu.Model(classes=dataset.classes, loader=loader, GCONF=GCONF)
 
     # logging parameter config
-    if tms.is_show_network_difinition:
-        _show_network_difinition(model, dataset, log)
+    if GCONF.option.is_show_network_difinition:
+        _show_network_difinition(model, dataset)
 
+    exit()
     # ===== training model =====
     model.train()  # train
     model.test()  # final test
 
     # ===== save model =====
     # final pth
-    if tms.is_save_final_pth:
+    if GCONF.network.is_save_final_model:
         # pth path
         save_path = ul.create_file_path(
-            tms.pth_save_path, tms.filename_base, end="_final", ext="pth"
+            GCONF.path.model, GCONF.filename_base, end="_final", ext="pth"
         )
 
         progress = ul.ProgressLog(f"Saving model to '{save_path}'")
 
-        save_option = [True, True] if tms.is_available_re_training else [False, False]
+        save_option = [True, True] if GCONF.option.is_available_re_training else [False, False]
         model.save(save_path, *save_option)  # save
 
         progress.complete()
 
-        log.writeline(f"# Saved model to '{save_path}'", debug_ok=False)
+        GCONF.log.writeline(f"# Saved model to '{save_path}'", debug_ok=False)
 
     # close file when opening.
-    log.close()
-    rate.close()
+    GCONF.log.close()
+    GCONF.rate.close()
 
     return 0
 
 
-def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset, log: ul.LogFile) -> None:
+def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset) -> None:
     r"""Show network difinition on console.
 
     Args:
@@ -187,25 +161,25 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset, log: ul
         dataset (tu.CreateDataset): dataset.
         log (ul.LogFile): log.
     """
-    tms = model.tms
+    GCONF = model.GCONF
 
     global_conf = {
-        "run time": tms.filename_base,
-        "image path": tms.dataset_path,
-        "supported extensions": tms.extensions,
-        "saving debug log is": tms.is_save_debug_log,
-        "saving rate log is": tms.is_save_rate_log,
-        "pth save cycle": tms.pth_save_cycle,
-        "test cycle": tms.test_cycle,
-        "saving final pth is": tms.is_save_final_pth,
-        "Grad-CAM is": tms.is_grad_cam,
-        "Grad-CAM layer": tms.grad_cam_layer,
-        "load model is ": tms.is_load_model,
-        "load path": tms.load_pth_path if tms.is_load_model else "None",
+        "run time": GCONF.filename_base,
+        "image path": GCONF.path.dataset,
+        "supported extensions": GCONF.dataset.extensions,
+        "saving debug log is": GCONF.option.is_save_debug_log,
+        "saving rate log is": GCONF.option.is_save_rate_log,
+        "pth save cycle": GCONF.network.save_cycle,
+        "test cycle": GCONF.network.test_cycle,
+        "saving final pth is": GCONF.network.is_save_final_model,
+        "Grad-CAM is": GCONF.gradcam.enabled,
+        "Grad-CAM layer": GCONF.gradcam.layer,
+        "load model is ": GCONF.option.load_model_path,
+        "load path": GCONF.option.load_model_path if GCONF.option.re_training else "None",
     }
 
     dataset_conf = {
-        "limit dataset size": tms.limit_dataset_size,
+        "limit dataset size": GCONF.dataset.limit_size,
         "train dataset size": dataset.train_size,
         "unknown dataset size": dataset.unknown_size,
         "known dataset size": dataset.known_size,
@@ -215,13 +189,13 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset, log: ul
         "net": str(model.net),
         "optimizer": str(model.optimizer),
         "criterion": str(model.criterion),
-        "input size": f"(h: {tms.height}, w: {tms.width})",
-        "epoch": tms.epoch,
-        "batch size": tms.batch,
-        "subdivision": tms.subdivision,
+        "input size": f"(h: {GCONF.network.height}, w: {GCONF.network.width})",
+        "epoch": GCONF.network.epoch,
+        "batch size": GCONF.network.batch,
+        "subdivision": GCONF.network.subdivision,
         "GPU available": torch.cuda.is_available(),
-        "GPU used": tms.use_gpu and torch.cuda.is_available(),
-        "re-training": ("available" if tms.is_available_re_training else "not available"),
+        "GPU used": GCONF.network.gpu_enabled and torch.cuda.is_available(),
+        "re-training": ("available" if GCONF.option.is_available_re_training else "not available"),
     }
 
     def _inner_execute(_dict: Dict[str, Any], head: str = "") -> None:
@@ -231,7 +205,7 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset, log: ul
             _dict (Dict[str, Any]): show contents.
             head (str, optional): show before showing contents. Defaults to ''.
         """
-        log.writeline(head, debug_ok=True)
+        GCONF.log.writeline(head, debug_ok=True)
 
         # adjust to max length of key
         max_len = max([len(x) for x in _dict.keys()])
@@ -242,15 +216,16 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset, log: ul
             if isinstance(v, str) and v.find("\n") > -1:
                 v = v.replace("\n", "\n" + " " * (max_len + 3)).rstrip()
 
-            log.writeline(f"{k.center(max_len)} : {v}", debug_ok=True)
-        log.writeline("\n", debug_ok=True)
+            GCONF.log.writeline(f"{k.center(max_len)} : {v}", debug_ok=True)
+        GCONF.log.writeline("", debug_ok=True)
 
     classes = {str(k): v for k, v in model.classes.items()}
 
-    _inner_execute(classes, "--- Classify Classes ---")
-    _inner_execute(global_conf, "--- Global Config ---")
-    _inner_execute(dataset_conf, "--- Dataset Config ---")
-    _inner_execute(model_conf, "--- Model Config ---")
+    print()
+    _inner_execute(classes, "--- Classes ---")
+    _inner_execute(global_conf, "--- Global Configuration ---")
+    _inner_execute(dataset_conf, "--- Dataset Configuration ---")
+    _inner_execute(model_conf, "--- Model Configuration ---")
 
 
 def _get_rate_log_as_table():
