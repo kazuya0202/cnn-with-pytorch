@@ -65,6 +65,8 @@ class Option_:
     is_show_network_difinition: bool = True
     is_save_debug_log: bool = True
     is_save_rate_log: bool = True
+    is_save_mistaken_pred: bool = False
+    is_save_used_image_path: bool = True
 
     is_available_re_training: bool = False
     re_training: bool = False

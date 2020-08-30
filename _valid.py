@@ -160,7 +160,7 @@ class ValidModel:
 
 if __name__ == "__main__":
     # 学習済みモデル
-    pth_path = r"D:\workspace\repos\github.com\kazuya0202\cnn-with-pytorch\recognition_datasets\0_2020Feb10_21h48m40s_final.pth"
+    pth_path = r"D:\workspace\repos\github.com\kazuya0202\cnn-with-pytorch\datasets\0_2020Feb10_21h48m40s_final.pth"
     use_gpu = True
 
     vm = ValidModel(pth_path, use_gpu, in_channels=3)
@@ -184,10 +184,10 @@ if __name__ == "__main__":
         img_path = img_path.strip()
         result = vm.valid(img_path)
 
-        ss = ""
-        ss += str(result.label).center(10)
-        ss += str(result.name).center(15)
-        ss += str(result.rate).center(8)
-        ss += " " + Path(img_path).name
+        s = ""
+        s += str(result.label).center(10)
+        s += str(result.name).center(15)
+        s += str(result.rate).center(8)
+        s += " " + Path(img_path).name
 
-        print(ss)
+        print(s)

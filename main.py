@@ -25,8 +25,9 @@ def preprocess() -> GlobalConfig:
     args = parse_argument()
     yaml_path = args.path
     if yaml_path is not None:
-        print(f"Set `yaml_path` to {yaml_path}")
+        print(f"Set `yaml_path` to '{yaml_path}'")
 
+    print(f"Reading config from '{yaml_path}'...")
     return factory_config(yaml_path)
 
 
@@ -45,6 +46,8 @@ def main() -> int:
     """ DEBUG NOW """
     GCONF.option.is_save_debug_log = False
     GCONF.option.is_save_rate_log = False
+    GCONF.option.is_save_mistaken_pred = False
+    GCONF.option.is_save_used_image_path = False
     """ --------- """
 
     # # if not exist, raise error
@@ -124,7 +127,6 @@ def main() -> int:
     if GCONF.option.is_show_network_difinition:
         _show_network_difinition(model, dataset)
 
-    exit()
     # ===== training model =====
     model.train()  # train
     model.test()  # final test
@@ -137,12 +139,11 @@ def main() -> int:
             GCONF.path.model, GCONF.filename_base, end="_final", ext="pth"
         )
 
-        progress = ul.ProgressLog(f"Saving model to '{save_path}'")
+        # progress = ul.ProgressLog(f"Saving model to '{save_path}'")
+        print(f"Saving model to '{save_path}'...")
 
         save_option = [True, True] if GCONF.option.is_available_re_training else [False, False]
         model.save(save_path, *save_option)  # save
-
-        progress.complete()
 
         GCONF.log.writeline(f"# Saved model to '{save_path}'", debug_ok=False)
 
@@ -159,7 +160,6 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset) -> None
     Args:
         model (tu.Model): model.
         dataset (tu.CreateDataset): dataset.
-        log (ul.LogFile): log.
     """
     GCONF = model.GCONF
 
@@ -226,30 +226,6 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset) -> None
     _inner_execute(global_conf, "--- Global Configuration ---")
     _inner_execute(dataset_conf, "--- Dataset Configuration ---")
     _inner_execute(model_conf, "--- Model Configuration ---")
-
-
-def _get_rate_log_as_table():
-    pass
-    # rate log
-    # ss = ul.set_align_center('Test No') + ' | '
-    # ss += ul.set_align_center('unknown [all]', align=15) + ' | '
-    # ss += ul.set_align_center('known [all]', align=15) + ' | '
-
-    # cls_list = dataset.classes.values()
-    # max_len = max([len(x) for x in cls_list])
-    # cls_align = max(max_len, 10)
-
-    # ss += ' | '.join([ul.set_align_center(x, cls_align) for x in cls_list])
-
-    # import re
-    # xs = list('\n' + ('-' * len(ss)))  # to character list
-    # indexes = [x.start() for x in re.finditer(r'\|', ss)]
-    # for x in indexes:
-    #     xs[x + 1] = '+'
-
-    # ss += ''.join(xs)  # to string and assign
-    # rate.writeline(ss)
-    # exit()
 
 
 if __name__ == "__main__":

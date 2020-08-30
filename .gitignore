@@ -1,4 +1,4 @@
-recognition_datasets/**/*
+dataset/**/*
 runs/
 config/
 mistaken/

@@ -367,18 +367,20 @@ class Model:
                 # cls_bool = [label_ans[i] for i, x in enumerate(pred_bool) if not x]
 
                 pred_bool = label_ans == predicted  # matching
-                # index of mistake prediction
-                false_step = [idx for idx, x in enumerate(pred_bool) if not x]
 
-                # save image of mistake prediction
-                for idx in false_step:
-                    fp = self.false_paths[epoch]
-                    name = Path(str(paths[idx])).name
+                if self.GCONF.option.is_save_mistaken_pred:
+                    # index of mistake prediction
+                    false_step = [idx for idx, x in enumerate(pred_bool) if not x]
 
-                    img_path = Path(fp, f"batch_{batch_idx}-{name}")
-                    img_path.parent.mkdir(parents=True, exist_ok=True)
+                    # save image of mistake prediction
+                    for idx in false_step:
+                        fp = self.false_paths[epoch]
+                        name = Path(str(paths[idx])).name
 
-                    save_image(imgs[idx], str(img_path))  # save
+                        img_path = Path(fp, f"batch_{batch_idx}-{name}")
+                        img_path.parent.mkdir(parents=True, exist_ok=True)
+
+                        save_image(imgs[idx], str(img_path))  # save
 
                 # count of matched label
                 acc_cnt = pred_bool.sum()
@@ -395,11 +397,10 @@ class Model:
                 )
 
                 # for log
-                ss = f"loss: {loss_val:<.6f} / acc: {acc:<.6f}"
-                ss += f"\n  -> ans   : {label_ans}"
-                ss += f"\n  -> result: {predicted}"
-
-                self.GCONF.log.writeline(ss, debug_ok=False)
+                s = f"loss: {loss_val:<.6f} / acc: {acc:<.6f}"
+                s += f"\n  -> ans : {label_ans}"
+                s += f"\n  -> pred: {predicted}"
+                self.GCONF.log.writeline(s, debug_ok=False)
 
                 # break
                 # end of this batch
@@ -438,9 +439,10 @@ class Model:
                     self.pth_save_path, "", head=f"epoch{epoch + 1}", ext="pth"
                 )
 
-                progress = ul.ProgressLog(f"Saving model to '{save_path}'")
+                # progress = ul.ProgressLog(f"Saving model to '{save_path}'")
+                print(f"Saving model to '{save_path}'...")
                 self.save(save_path, *save_option)  # save
-                progress.complete()
+                # progress.complete()
 
                 # log
                 self.GCONF.log.writeline(f"# Saved model to '{save_path}'")
@@ -539,9 +541,9 @@ class Model:
                     for key, data_list in ret.items():
                         for i, img_data in enumerate(data_list):
                             # save path
-                            ss = f"{batch_idx}_{self.classes[i]}_{key}"
-                            ss += f"_pred[{predicted}]_correct[{label_ans}].png"
-                            _path = base_dir.joinpath(ss)
+                            s = f"{batch_idx}_{self.classes[i]}_{key}"
+                            s += f"_pred[{predicted}]_correct[{label_ans}].png"
+                            _path = base_dir.joinpath(s)
 
                             # save
                             cv2.imwrite(str(_path), img_data)  # type: ignore
@@ -560,10 +562,10 @@ class Model:
                     acc = acc_num / all_num
                     total_acc += acc
 
-                    ss = "%-12s -> " % f"[{_cls}]"
-                    ss += f"acc: {acc:<.4f} ({acc_num} / {all_num} images.)"
-                    self.GCONF.log.writeline(ss)
-                    print(f"  {ss}")
+                    s = "%-12s -> " % f"[{_cls}]"
+                    s += f"acc: {acc:<.4f} ({acc_num} / {all_num} images.)"
+                    self.GCONF.log.writeline(s)
+                    print(f"  {s}")
 
                     # rate log
                     self.GCONF.rate.write(f", {acc}")
@@ -635,8 +637,9 @@ class Model:
 
         # key is exists, load value and it assign to variable.
         # key is not exists, initialize value and it assign to variable.
-        self.optimizer = checkpoint.pop("optimizer_state_dict", optim.Adam(self.net.parameters()))
-        self.current_epoch = checkpoint("epoch", 0)
+        self.optimizer = checkpoint.pop("optimizer_state_dict", radam.RAdam(self.net.parameters()))
+        # self.optimizer = checkpoint.pop("optimizer_state_dict", optim.Adam(self.net.parameters()))
+        self.current_epoch = checkpoint.pop("epoch", 0)
 
         self.criterion = nn.CrossEntropyLoss()
 

@@ -1,12 +1,13 @@
 path:
   # dataset: '${your_dataset_path}'
-  dataset: 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+  # dataset: 'D:\workspace\repos\gitlab.com\ichiya\prcn2019-datasets\datasets\Images-20191014'
+  dataset: './dataset/Images/'
 
-  mistaken: './mistaken'
-  model: './'
-  config: './config'
-  log: './logs'
-  gradcam: './GradCAM_results'
+  mistaken: './dataset/mistaken'
+  model: './dataset'
+  config: './dataset/config'
+  log: './dataset/logs'
+  gradcam: './dataset/GradCAM_results'
 
 dataset:
   limit_size: -1
@@ -40,6 +41,8 @@ option:
   is_show_network_difinition: true
   is_save_debug_log: true
   is_save_rate_log: true
+  is_save_mistaken_pred: false
+  is_save_used_image_path: true
 
   is_available_re_training: false
   re_training: false

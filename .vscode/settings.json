@@ -15,5 +15,6 @@
             ],
             "url": "/json_schema/settings_schema.json"
         },
-    ]
+    ],
+    "git.ignoreLimitWarning": true
 }
