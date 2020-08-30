@@ -1,10 +1,10 @@
 # CNN implemented PyTorch with Grad-CAM
 
-|       Script       |   Description    |
-| :----------------: | :--------------: |
-|      main.py       |     学習全般     |
-| user_settings.toml |   ユーザー設定   |
-|     _valid.py      | 学習モデルの検証 |
+|      Script      |   Description    |
+| :--------------: | :--------------: |
+|     main.py      |     学習実行     |
+| user_config.yaml |   ユーザー設定   |
+|    _valid.py     | 学習モデルの検証 |
 
 <br>
 
@@ -14,7 +14,7 @@
 
   1. PyTorch
 
-     [PyTorch インストール方法（書き次第リンク貼る）]() 参照。
+     PyTorch インストール。
 
   2. その他モジュール
 
@@ -30,24 +30,24 @@
 
 ## Usage
 
-`user_settings.toml`は`main.py`と同じディレクトリに置く。
+`user_config.yaml`は`main.py`と同じディレクトリに置く。
 
 もしくは、実行時にパスを指定する。
 
 ---
 
-1. *[user_settings.toml](https://github.com/kazuya0202/cnn-with-pytorch/blob/master/user_settings.toml)* を編集する `Notes: 1`
+1. *[user_config.yaml](https://github.com/kazuya0202/cnn-with-pytorch/blob/dev/user_config.yaml)* を編集する `Notes: 1`
 
    ※ 変数名は変更しない。
 
 2. スクリプトを実行する `Notes: 2`
 
-   + `user_settings.toml`が同じディレクトリにない場合は、`--path`オプションで直接指定する。
+   + `user_config.yaml`が同じディレクトリにない場合、もしくは、別名のファイルを指定する場合`--path`オプションで直接指定する。
    
    ```sh
    $ python main.py
    # or
-   $ python main.py --path <toml path>
+   $ python main.py --path <yaml path>
    ```
 
 <br>
@@ -95,7 +95,7 @@ toml.decoder.TomlDecodeError: invalid literal for int() with base 0: 'tru' (line
 
 ### 【2】
 
-+ GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_settings.toml`の`subdivision`の値を増やす。
++ GPUのメモリ不足で *CUDA Memory Error* が出る場合、`user_config.yaml`の`subdivision`の値を増やす。
 + テスト時に間違えた画像のみ**Grad-CAM**を行う。
 + クラス分類は、自動で定義される。
   + `[dataset] > dataset_path`の子ディレクトリをクラスとして扱う。
