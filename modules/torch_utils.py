@@ -74,7 +74,9 @@ class CreateDataset(Dataset):
         # ----------
 
         self._get_all_datas()  # train / unknown / known
-        self._write_config()  # write config of model
+
+        if self.GCONF.option.is_save_config:
+            self._write_config()  # write config of model
 
     def _get_all_datas(self) -> None:
         r"""Get all datas from each directory."""
@@ -130,20 +132,14 @@ class CreateDataset(Dataset):
 
         def _inner_execute(add_path: str, target: str):
             path = _dir.joinpath(add_path)
-            file_ = ul.LogFile(path, std_debug_ok=False, _clear=True)
+            with ul.LogFile(path, std_debug_ok=False, _clear=True) as f:
+                for x in self.all_list[target]:
+                    p = Path(x.path).resolve()  # convert to absolute path
+                    f.writeline(p.as_posix())
 
-            for x in self.all_list[target]:
-                p = Path(x.path).resolve()  # convert to absolute path
-                file_.writeline(p.as_posix())
-
-            file_.close()
-
-        # -- train image
-        _inner_execute("train_used_images.txt", "train")
-        # -- unknown image
-        _inner_execute("unknown_used_images.txt", "unknown")
-        # -- known image
-        _inner_execute("known_used_images.txt", "known")
+        _inner_execute("train_used_images.txt", "train")  # train
+        _inner_execute("unknown_used_images.txt", "unknown")  # unknown
+        _inner_execute("known_used_images.txt", "known")  # known
 
     def create_dataloader(
         self, batch_size: int = 64, transform: Any = None, is_shuffle: bool = True
@@ -177,9 +173,8 @@ class CustomDataset(Dataset):
     r"""Custom dataset
 
     Args:
-        # dataset (CreateDataset): dataset config
-        target (str, optional): target dataset. Defaults to 'train'.
-        transform (transforms, optional): transform of tensor. Defaults to None.
+        target_list (List[Data]): dataset list.
+        transform (Any, optional): transform of tensor. Defaults to None.
     """
     target_list: List[Data]
     transform: Any = None
@@ -219,7 +214,7 @@ class CustomDataset(Dataset):
 
 @dataclass
 class Model:
-    def __init__(self, classes: Dict[int, str], loader: Any, GCONF: GlobalConfig,) -> None:
+    def __init__(self, classes: Dict[int, str], loader: dict, GCONF: GlobalConfig,) -> None:
         self.train_loader: DataLoader = loader.pop("train", None)
         self.unknown_loader: DataLoader = loader.pop("unknown", None)
         self.known_loader: DataLoader = loader.pop("known", None)
@@ -242,7 +237,9 @@ class Model:
         self.classify_size: int = len(classes)
 
         # tensorboard
-        self.writer = tbx.SummaryWriter()
+        self.writer = None
+        if GCONF.option.is_save_runs:
+            self.writer = tbx.SummaryWriter()
 
         # Grad-CAM setting
         self.egc = ExecuteGradCAM(
@@ -261,7 +258,8 @@ class Model:
         else:
             self._build()  # build model
 
-        self._write_classes()  # save classes
+        if GCONF.option.is_save_config:
+            self._write_classes()  # save classes
 
         # for making false path
         base = Path(GCONF.path.mistaken, GCONF.filename_base)
@@ -352,7 +350,8 @@ class Model:
                 loss_val = batch_loss / subdivision  # calc avg loss value
 
                 # tensorboard log
-                self.writer.add_scalar("data/loss", loss_val, plot_point)
+                if self.writer is not None:
+                    self.writer.add_scalar("data/loss", loss_val, plot_point)
                 plot_point += 1
 
                 # label
@@ -406,9 +405,10 @@ class Model:
                 # end of this batch
 
             # add confusion matrix to tensorboard
-            cm = calc_confusion_matrix(all_label, all_pred, len(self.classes))
-            fig = plot_confusion_matrix(cm, list(self.classes.values()))
-            add_to_tensorboard(self.writer, fig, "confusion matrix", epoch)
+            if self.writer is not None:
+                cm = calc_confusion_matrix(all_label, all_pred, len(self.classes))
+                fig = plot_confusion_matrix(cm, list(self.classes.values()))
+                add_to_tensorboard(self.writer, fig, "confusion matrix", epoch)
 
             # calclate total loss / accuracy
             size = len(self.train_loader.dataset)
@@ -426,8 +426,9 @@ class Model:
             print(f"  Total acc: {total_acc}\n")
 
             # for tensorboard
-            self.writer.add_scalar("data/total_acc", total_acc, epoch)
-            self.writer.add_scalar("data/total_loss", total_loss, epoch)
+            if self.writer is not None:
+                self.writer.add_scalar("data/total_acc", total_acc, epoch)
+                self.writer.add_scalar("data/total_loss", total_loss, epoch)
 
             # exec test cycle
             if test_schedule[epoch]:
@@ -452,7 +453,8 @@ class Model:
 
         # export as json
         # self.writer.export_scalars_to_json(f'{self.tms.config_path}/all_scalars.json')
-        self.writer.close()
+        if self.writer is not None:
+            self.writer.close()
 
         # end of all epoch
 
@@ -546,7 +548,8 @@ class Model:
                             _path = base_dir.joinpath(s)
 
                             # save
-                            cv2.imwrite(str(_path), img_data)  # type: ignore
+                            # cv2.imwrite(str(_path), img_data)  # type: ignore
+                            print(_path)
 
                             # for debug
                             # plt.imshow(img_data)
@@ -667,13 +670,11 @@ class Model:
     def _write_classes(self) -> None:
         r"""Writing classes of dataset."""
         path = Path(self.GCONF.path.config, "classes.txt")
-        file_ = ul.LogFile(path, std_debug_ok=False, _clear=True)
+        with ul.LogFile(path, std_debug_ok=False, _clear=True) as f:
+            path.parent.mkdir(parents=True, exist_ok=True)
 
-        path.parent.mkdir(parents=True, exist_ok=True)
-
-        for k, _cls in self.classes.items():
-            file_.writeline(f"{k}:{_cls}")
-        file_.close()
+            for k, _cls in self.classes.items():
+                f.writeline(f"{k}:{_cls}")
 
     def _create_schedule(self, cycle: int) -> List[bool]:
         r"""Returns exec schedule of cycle.

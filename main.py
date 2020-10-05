@@ -43,12 +43,13 @@ def main() -> int:
     # load config.
     GCONF = preprocess()
 
-    """ DEBUG NOW """
-    GCONF.option.is_save_debug_log = False
-    GCONF.option.is_save_rate_log = False
-    GCONF.option.is_save_mistaken_pred = False
-    GCONF.option.is_save_used_image_path = False
-    """ --------- """
+    # exclude unnecessary options.
+    if GCONF.option.is_debug:
+        GCONF.option.is_save_debug_log = False
+        GCONF.option.is_save_rate_log = False
+        GCONF.option.is_save_mistaken_pred = False
+        GCONF.option.is_save_config = False
+        GCONF.option.is_save_runs = False
 
     # # if not exist, raise error
     ul.raise_when_FileNotFound(GCONF.path.dataset)
@@ -68,13 +69,11 @@ def main() -> int:
         GCONF.rate = ul.LogFile(p, std_debug_ok=False)
 
     # ===== datasets =====
-    # progress = ul.ProgressLog(f"Create dataset from '{GCONF.path.dataset}'")
     print(f"Create dataset from '{GCONF.path.dataset}'...")
-    # train, unknown, known
-    dataset = tu.CreateDataset(GCONF=GCONF)
+    dataset = tu.CreateDataset(GCONF=GCONF)  # train, unknown, known
 
     # ===== calculate dataset normalization =====
-    # progress = ul.ProgressLog('Calculating dataset normalization')
+    # print("Calculating dataset normalization...")
 
     # import time
     # st = time.time()
@@ -82,8 +81,6 @@ def main() -> int:
     # mean, std = tu.calc_dataset_norm(dataset, GCONF.network.channels)
     # print(f'mean: {mean}')
     # print(f'std : {std}')
-
-    # progress.complete()
 
     # transform
     transform = transforms.Compose(
@@ -118,7 +115,6 @@ def main() -> int:
     GCONF.rate.writeline(f"Test No, {_}, TOTAL, {_}, TOTAL")
 
     # ===== network =====
-    # progress = ul.ProgressLog("Building CNN network")  # debug log
     print("Building CNN network...")
     # build network
     model = tu.Model(classes=dataset.classes, loader=loader, GCONF=GCONF)
@@ -198,14 +194,14 @@ def _show_network_difinition(model: tu.Model, dataset: tu.CreateDataset) -> None
         "re-training": ("available" if GCONF.option.is_available_re_training else "not available"),
     }
 
-    def _inner_execute(_dict: Dict[str, Any], head: str = "") -> None:
+    def _inner_execute(_dict: Dict[str, Any], header: str = "") -> None:
         r"""execute.
 
         Args:
             _dict (Dict[str, Any]): show contents.
             head (str, optional): show before showing contents. Defaults to ''.
         """
-        GCONF.log.writeline(head, debug_ok=True)
+        GCONF.log.writeline(header, debug_ok=True)
 
         # adjust to max length of key
         max_len = max([len(x) for x in _dict.keys()])

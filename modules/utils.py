@@ -65,6 +65,12 @@ class LogFile:
         if self._is_write:
             self._file.close()
 
+    def __enter__(self) -> 'LogFile':
+        return self
+
+    def __exit__(self, t, v, tb) -> None:
+        self.close()
+
 
 def create_file_path(
     dir_path: _path_t, name: str, head: str = None, end: str = "", ext="txt"
